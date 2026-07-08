@@ -5,6 +5,7 @@ import uvicorn
 from .config import get_settings
 from .database import engine, Base
 from .routers import (
+    auth,
     fields,
     workers,
     harvest_rounds,
@@ -13,12 +14,24 @@ from .routers import (
     notifications,
 )
 
+from contextlib import asynccontextmanager
+
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ensure all tables (including users) are created
+    import app.models  # noqa: F401
+    Base.metadata.create_all(bind=engine)
+    yield
+
 
 app = FastAPI(
     title="TeaMate Yield Optimization Backend",
     description="FastAPI + PostgreSQL service connecting mobile app and ML model.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Allow mobile app connections (CORS)
@@ -31,6 +44,7 @@ app.add_middleware(
 )
 
 # Register API routers
+app.include_router(auth.router, prefix="/api/v1")
 app.include_router(fields.router, prefix="/api/v1")
 app.include_router(workers.router, prefix="/api/v1")
 app.include_router(harvest_rounds.router, prefix="/api/v1")

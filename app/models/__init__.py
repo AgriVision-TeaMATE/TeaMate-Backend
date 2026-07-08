@@ -7,6 +7,7 @@ from .worker_assignment import WorkerFieldAssignment
 from .plucking_schedule import PluckingSchedule, ScheduleWorker
 from .weather_log import WeatherLog
 from .notification import Notification
+from .user import User
 
 __all__ = [
     "Field",
@@ -19,4 +20,5 @@ __all__ = [
     "ScheduleWorker",
     "WeatherLog",
     "Notification",
+    "User",
 ]
