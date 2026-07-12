@@ -1,4 +1,4 @@
-"""Initial schema and development seed data
+"""Initial schema
 
 Revision ID: 001
 Revises:
@@ -7,7 +7,6 @@ Create Date: 2026-06-27
 """
 from typing import Sequence, Union
 import uuid
-from datetime import datetime, timezone
 
 from alembic import op
 import sqlalchemy as sa
@@ -198,27 +197,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_notifications_field_id"), "notifications", ["field_id"], unique=False)
-
-    # Seed master data (matching mobile front end mock data)
-    fields_table = sa.table(
-        "fields",
-        sa.column("id", sa.Uuid()),
-        sa.column("name", sa.String),
-        sa.column("region", sa.String),
-        sa.column("area_hectares", sa.Numeric),
-        sa.column("latitude", sa.Numeric),
-        sa.column("longitude", sa.Numeric),
-        sa.column("elevation_meters", sa.Numeric),
-    )
-    f_ids = [uuid.uuid4() for _ in range(3)]
-    op.bulk_insert(
-        fields_table,
-        [
-            {"id": f_ids[0], "name": "Upper Ridge Block A", "region": "Highland Estate", "area_hectares": 2.4, "latitude": 6.927100, "longitude": 80.600500, "elevation_meters": 1380},
-            {"id": f_ids[1], "name": "Valley Slope North", "region": "Mist Valley", "area_hectares": 1.8, "latitude": 6.928200, "longitude": 80.602100, "elevation_meters": 1150},
-            {"id": f_ids[2], "name": "River Terrace C", "region": "Lower Plains", "area_hectares": 3.1, "latitude": 6.925500, "longitude": 80.598800, "elevation_meters": 980},
-        ],
-    )
 
     workers_table = sa.table(
         "workers",
