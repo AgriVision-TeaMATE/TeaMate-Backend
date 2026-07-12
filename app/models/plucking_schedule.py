@@ -35,6 +35,9 @@ class PluckingSchedule(Base):
     field_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("fields.id", ondelete="CASCADE"), nullable=False
     )
+    harvest_round_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("harvest_rounds.id", ondelete="CASCADE"), nullable=True
+    )
     scheduled_date: Mapped[date] = mapped_column(Date, nullable=False)
     shift_start: Mapped[time] = mapped_column(Time, nullable=False)
     shift_end: Mapped[time] = mapped_column(Time, nullable=False)
@@ -58,6 +61,7 @@ class PluckingSchedule(Base):
 
     # Relationships
     field = relationship("Field", back_populates="plucking_schedules")
+    harvest_round = relationship("HarvestRound")
     schedule_workers = relationship(
         "ScheduleWorker",
         back_populates="schedule",

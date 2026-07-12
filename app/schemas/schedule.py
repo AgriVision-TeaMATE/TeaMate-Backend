@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 class ScheduleCreate(BaseModel):
     field_id: UUID
+    harvest_round_id: UUID | None = None
     scheduled_date: date
     shift_start: time
     shift_end: time
@@ -25,6 +26,7 @@ class ScheduleResponse(BaseModel):
 
     id: UUID
     field_id: UUID
+    harvest_round_id: UUID | None
     scheduled_date: date
     shift_start: time
     shift_end: time

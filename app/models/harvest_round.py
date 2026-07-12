@@ -1,19 +1,10 @@
 import uuid
 from datetime import datetime
-from enum import Enum as PyEnum
 
-from sqlalchemy import String, Numeric, Integer, DateTime, ForeignKey, Enum, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
-
-
-class RoundStatus(str, PyEnum):
-    draft = "draft"
-    analyzing = "analyzing"
-    analyzed = "analyzed"
-    completed = "completed"
 
 
 class HarvestRound(Base):
@@ -25,26 +16,19 @@ class HarvestRound(Base):
     field_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("fields.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    round_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+    pluckable_ratio: Mapped[float | None] = mapped_column(
+        Numeric(5, 4)
     )
-    field_area_hectares: Mapped[float | None] = mapped_column(Numeric(6, 2))
-    predicted_yield_kg: Mapped[float | None] = mapped_column(Numeric(8, 2))
-    actual_yield_kg: Mapped[float | None] = mapped_column(Numeric(8, 2))
-    avg_pluckable_ratio: Mapped[float | None] = mapped_column(Numeric(5, 4))
-    total_arimbu_count: Mapped[int] = mapped_column(Integer, default=0)
-    total_pluckable_count: Mapped[int] = mapped_column(Integer, default=0)
     total_captured_area_sqm: Mapped[float] = mapped_column(
-        Numeric(8, 2), default=0
+        Numeric(8, 2), nullable=False, default=0, server_default="0"
     )
-    labor_priority: Mapped[str | None] = mapped_column(String(30))
-    readiness_status: Mapped[str] = mapped_column(
+    plucking_status: Mapped[str] = mapped_column(
         String(30), default="awaiting_analysis"
     )
-    status: Mapped[RoundStatus] = mapped_column(
-        Enum(RoundStatus, name="round_status_enum", create_constraint=True),
-        nullable=False,
-        default=RoundStatus.draft,
+    predicted_yield: Mapped[float | None] = mapped_column(Numeric(8, 2))
+    actual_yield: Mapped[float | None] = mapped_column(Numeric(8, 2))
+    is_completed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

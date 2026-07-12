@@ -8,12 +8,14 @@ from .weather import WeatherLogResponse
 
 
 class HarvestRoundCreate(BaseModel):
-    round_date: datetime | None = None
+    pass
 
 
 class HarvestRoundUpdate(BaseModel):
-    actual_yield_kg: float | None = None
-    field_area_hectares: float | None = None
+    plucking_status: str | None = None
+    predicted_yield: float | None = None
+    actual_yield: float | None = None
+    is_completed: bool | None = None
 
 
 class HarvestRoundResponse(BaseModel):
@@ -21,17 +23,12 @@ class HarvestRoundResponse(BaseModel):
 
     id: UUID
     field_id: UUID
-    round_date: datetime
-    field_area_hectares: float | None
-    predicted_yield_kg: float | None
-    actual_yield_kg: float | None
-    avg_pluckable_ratio: float | None
-    total_arimbu_count: int
-    total_pluckable_count: int
+    pluckable_ratio: float | None
     total_captured_area_sqm: float
-    labor_priority: str | None
-    readiness_status: str
-    status: str
+    plucking_status: str
+    predicted_yield: float | None
+    actual_yield: float | None
+    is_completed: bool
     created_at: datetime
     updated_at: datetime
     analysis_images: list[AnalysisImageResponse] = []

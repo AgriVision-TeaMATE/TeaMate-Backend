@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8001
     DEBUG: bool = True
+    DEFAULT_WEATHER_LAT: float = 6.9271
+    DEFAULT_WEATHER_LON: float = 80.6005
+    SMS_PROVIDER: str = "mock"
 
     @field_validator("DEBUG", mode="before")
     @classmethod
