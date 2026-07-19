@@ -14,12 +14,6 @@ class WorkerStatus(str, PyEnum):
     on_leave = "on_leave"
 
 
-class SkillLevel(str, PyEnum):
-    junior = "junior"
-    experienced = "experienced"
-    senior = "senior"
-
-
 class Worker(Base):
     __tablename__ = "workers"
 
@@ -32,11 +26,6 @@ class Worker(Base):
         Enum(WorkerStatus, name="worker_status_enum", create_constraint=True),
         nullable=False,
         default=WorkerStatus.available,
-    )
-    skill_level: Mapped[SkillLevel] = mapped_column(
-        Enum(SkillLevel, name="skill_level_enum", create_constraint=True),
-        nullable=False,
-        default=SkillLevel.experienced,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

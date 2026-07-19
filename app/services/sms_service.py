@@ -8,9 +8,9 @@ settings = get_settings()
 
 def send_schedule_sms(schedule: PluckingSchedule, workers: list[Worker], field_name: str) -> dict:
     message = (
-        f"TeaMate: You are assigned to plucking at {field_name} on "
-        f"{schedule.scheduled_date.isoformat()} from {schedule.shift_start.strftime('%I:%M %p')} "
-        f"to {schedule.shift_end.strftime('%I:%M %p')}."
+        f"TeaMate: You are assigned to plucking at {field_name} "
+        f"(Field ID: {str(schedule.field_id)[:8]}) "
+        f"on {schedule.scheduled_date.isoformat()}."
     )
 
     if settings.SMS_PROVIDER == "mock":

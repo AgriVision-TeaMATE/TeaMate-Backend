@@ -7,13 +7,11 @@ from pydantic import BaseModel, ConfigDict
 class WorkerCreate(BaseModel):
     name: str
     phone: str
-    skill_level: str = "experienced"
 
 
 class WorkerUpdate(BaseModel):
     name: str | None = None
     phone: str | None = None
-    skill_level: str | None = None
 
 
 class WorkerResponse(BaseModel):
@@ -23,7 +21,6 @@ class WorkerResponse(BaseModel):
     name: str
     phone: str
     status: str
-    skill_level: str
     created_at: datetime
     updated_at: datetime
 

@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime, time, timezone
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -6,7 +6,16 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
 from ..dependencies.auth import get_current_user
-from ..models import HarvestRound, Field, User
+from ..models import (
+    Field,
+    HarvestRound,
+    PluckingSchedule,
+    ScheduleWorker,
+    User,
+    WorkerFieldAssignment,
+)
+from ..models.plucking_schedule import ScheduleStatus
+from ..models.worker import WorkerStatus
 from ..schemas.harvest_round import (
     HarvestRoundCreate,
     HarvestRoundUpdate,
@@ -137,6 +146,33 @@ def complete_round(
     round_obj.is_completed = True
     if round_obj.plucking_status == "awaiting_analysis":
         round_obj.plucking_status = "completed"
+    schedules = db.scalars(
+        select(PluckingSchedule)
+        .where(PluckingSchedule.harvest_round_id == round_obj.id)
+        .options(
+            selectinload(PluckingSchedule.schedule_workers).selectinload(
+                ScheduleWorker.worker
+            )
+        )
+    ).all()
+    for schedule in schedules:
+        schedule.status = ScheduleStatus.completed
+        for schedule_worker in schedule.schedule_workers:
+            worker = schedule_worker.worker
+            if not worker:
+                continue
+            for assignment in worker.field_assignments:
+                if assignment.is_active and assignment.field_id == round_obj.field_id:
+                    assignment.is_active = False
+                    assignment.unassigned_at = datetime.now(timezone.utc)
+            has_other_active = db.scalar(
+                select(WorkerFieldAssignment).where(
+                    WorkerFieldAssignment.worker_id == worker.id,
+                    WorkerFieldAssignment.is_active == True,  # noqa: E712
+                )
+            )
+            if not has_other_active:
+                worker.status = WorkerStatus.available
     db.commit()
     db.refresh(round_obj)
     return round_obj

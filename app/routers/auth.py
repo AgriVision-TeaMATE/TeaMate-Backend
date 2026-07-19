@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..dependencies.auth import get_current_user
 from ..models.user import User
 from ..schemas.user import (
     ForgotPasswordRequest,
@@ -14,6 +15,11 @@ from ..schemas.user import (
 from ..services.auth_utils import create_access_token, hash_password, verify_password
 
 router = APIRouter(tags=["Authentication"])
+
+
+@router.get("/auth/me", response_model=UserResponse)
+def get_profile(current_user: User = Depends(get_current_user)):
+    return UserResponse.model_validate(current_user)
 
 
 @router.post(
