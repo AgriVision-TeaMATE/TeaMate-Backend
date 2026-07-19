@@ -8,6 +8,14 @@ from ..models.notification import AlertSeverity, NotificationCategory
 from .weather_provider import fetch_weather_snapshot
 
 
+def weather_action_for_sms(weather: dict) -> str:
+    if weather["storm_risk"]:
+        return "Heavy rain or wind risk, wait for supervisor confirmation."
+    if weather["rain_chance_pct"] >= 40:
+        return "Rain possible, pluck before noon if safe."
+    return "Good plucking conditions."
+
+
 async def build_round_plan(
     round_obj: HarvestRound,
     db: Session,
@@ -69,6 +77,7 @@ async def build_round_plan(
         "wind_speed_kmh": weather["wind_speed_kmh"],
         "storm_risk": weather["storm_risk"],
         "weather_warning": warning,
+        "weather_action": weather_action_for_sms(weather),
         "can_schedule": can_schedule,
         "scheduled_date": scheduled_date,
         "shift_start": shift_start,

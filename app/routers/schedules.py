@@ -168,7 +168,14 @@ def send_schedule_sms_notifications(
         select(PluckingSchedule)
         .join(Field, PluckingSchedule.field_id == Field.id)
         .where(PluckingSchedule.id == schedule_id, Field.user_id == current_user.id)
-        .options(selectinload(PluckingSchedule.schedule_workers).selectinload(ScheduleWorker.worker))
+        .options(
+            selectinload(PluckingSchedule.schedule_workers).selectinload(
+                ScheduleWorker.worker
+            ),
+            selectinload(PluckingSchedule.harvest_round).selectinload(
+                HarvestRound.weather_log
+            ),
+        )
     )
     sched = db.scalar(stmt)
     if not sched:

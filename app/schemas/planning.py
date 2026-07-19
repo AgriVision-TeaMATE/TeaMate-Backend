@@ -25,6 +25,7 @@ class RoundPlanResponse(BaseModel):
     wind_speed_kmh: float | None = None
     storm_risk: bool = False
     weather_warning: str | None = None
+    weather_action: str | None = None
     can_schedule: bool
     scheduled_date: date
     shift_start: time
