@@ -27,23 +27,23 @@ APP_PORT=8001
 DEBUG=true
 ```
 
-### 4. Run database migrations (optional)
+### 4. Run database migrations
+
+Before starting the app, apply the existing migrations:
 
 ```powershell
 alembic upgrade head
 ```
 
-Note: the app also creates tables on startup with SQLAlchemy metadata.
-
-### 5. Start the backend
+If you make changes to the SQLAlchemy models and need to create a new migration file, run:
 
 ```powershell
-python -m app.main
+alembic revision --autogenerate -m "describe your change"
 ```
 
-The API will start on `http://localhost:8001` by default.
+Then apply it:
 
-### Alternative start command
+### 5. Start the backend
 
 You can also run it directly with Uvicorn:
 
