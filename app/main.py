@@ -14,6 +14,7 @@ from .routers import (
     analysis,
     schedules,
     notifications,
+    weather,
 )
 
 from contextlib import asynccontextmanager
@@ -57,6 +58,7 @@ app.include_router(harvest_rounds.router, prefix="/api/v1")
 app.include_router(analysis.router, prefix="/api/v1")
 app.include_router(schedules.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
+app.include_router(weather.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["System"])
