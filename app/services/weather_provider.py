@@ -67,20 +67,18 @@ async def fetch_last_week_summary(
     latitude: float,
     longitude: float,
 ) -> dict:
-    end_date = date.today()
-    start_date = end_date - timedelta(days=6)
-
     url = (
-        "https://archive-api.open-meteo.com/v1/archive"
+        "https://api.open-meteo.com/v1/forecast"
         f"?latitude={latitude}"
         f"&longitude={longitude}"
-        f"&start_date={start_date}"
-        f"&end_date={end_date}"
-        "&daily="
-        "temperature_2m_mean,"
-        "relative_humidity_2m_mean,"
-        "precipitation_sum,"
-        "wind_speed_10m_max"
+        "&hourly="
+        "temperature_2m,"
+        "relative_humidity_2m,"
+        "precipitation,"
+        "wind_speed_10m,"
+        "sunshine_duration"
+        "&past_days=7"
+        "&forecast_days=1"
         "&timezone=auto"
     )
 
@@ -89,63 +87,103 @@ async def fetch_last_week_summary(
         response.raise_for_status()
         payload = response.json()
 
-    daily = payload.get("daily", {})
+    hourly = payload.get("hourly", {})
+    times = hourly.get("time", [])
+    temperatures = hourly.get("temperature_2m", [])
+    humidities = hourly.get("relative_humidity_2m", [])
+    precipitation = hourly.get("precipitation", [])
+    wind_speeds = hourly.get("wind_speed_10m", [])
+    sunshine_seconds = hourly.get("sunshine_duration", [])
 
-    temperatures = daily.get(
-        "temperature_2m_mean",
-        []
-    )
+    # timezone=auto returns naive local timestamps for the queried
+    # location. Attach that location's actual UTC offset (returned by
+    # the API) to make every datetime timezone-aware and comparable,
+    # instead of guessing based on the server's own local time.
+    utc_offset_seconds = payload.get("utc_offset_seconds", 0)
+    local_tz = timezone(timedelta(seconds=utc_offset_seconds))
 
-    humidities = daily.get(
-        "relative_humidity_2m_mean",
-        []
-    )
+    now = datetime.now(local_tz)
+    cutoff_date = (now - timedelta(days=7)).date()
 
-    rainfall = daily.get(
-        "precipitation_sum",
-        []
-    )
+    rows = []
+    for i, ts in enumerate(times):
+        dt = datetime.fromisoformat(ts).replace(tzinfo=local_tz)
+        if dt.date() < cutoff_date or dt > now:
+            continue
+        rows.append(
+            {
+                "date": dt.date(),
+                "temperature": temperatures[i] if i < len(temperatures) else None,
+                "humidity": humidities[i] if i < len(humidities) else None,
+                "rain": precipitation[i] if i < len(precipitation) else 0,
+                "wind": wind_speeds[i] if i < len(wind_speeds) else None,
+                "sunshine": sunshine_seconds[i] if i < len(sunshine_seconds) else 0,
+            }
+        )
 
-    wind_speeds = daily.get(
-        "wind_speed_10m_max",
-        []
-    )
+    if not rows:
+        return {
+            "rainy_days_last_7": 0,
+            "rainy_hours_last_7": 0,
+            "total_rainfall_last_7": 0,
+            "avg_temperature_last_7": 0,
+            "avg_humidity_last_7": 0,
+            "max_humidity_last_7": 0,
+            "avg_wind_speed_last_7": 0,
+            "max_wind_speed_last_7": 0,
+            "avg_sunshine_hours_last_7": 0,
+            "estimated_leaf_wetness_hours_last_7": 0,
+        }
 
+    temperatures_clean = [r["temperature"] for r in rows if r["temperature"] is not None]
+    humidities_clean = [r["humidity"] for r in rows if r["humidity"] is not None]
+    winds_clean = [r["wind"] for r in rows if r["wind"] is not None]
+
+    rainy_hours = sum(1 for r in rows if (r["rain"] or 0) > 0)
+    total_rainfall = round(sum(r["rain"] or 0 for r in rows), 1)
+
+    days_seen = {r["date"] for r in rows}
     rainy_days = sum(
-        1 for rain in rainfall if rain > 0
-    )
-
-    avg_temperature = (
-        round(sum(temperatures) / len(temperatures), 1)
-        if temperatures
-        else 0
-    )
-
-    avg_humidity = (
-        round(sum(humidities) / len(humidities))
-        if humidities
-        else 0
-    )
-
-    max_wind_speed = (
-        round(max(wind_speeds), 1)
-        if wind_speeds
-        else 0
-    )
-
-    total_rainfall = round(
-        sum(rainfall),
         1
+        for d in days_seen
+        if sum(r["rain"] or 0 for r in rows if r["date"] == d) > 0
+    )
+
+    total_sunshine_hours = sum(r["sunshine"] or 0 for r in rows) / 3600
+    num_days = len(days_seen) or 1
+
+    leaf_wetness_hours = sum(
+        1
+        for r in rows
+        if (r["rain"] or 0) > 0 or (r["humidity"] is not None and r["humidity"] >= 90)
     )
 
     return {
         "rainy_days_last_7": rainy_days,
-        "avg_temperature_last_7": avg_temperature,
-        "avg_humidity_last_7": avg_humidity,
-        "max_wind_speed_last_7": max_wind_speed,
+        "rainy_hours_last_7": rainy_hours,
         "total_rainfall_last_7": total_rainfall,
+        "avg_temperature_last_7": (
+            round(sum(temperatures_clean) / len(temperatures_clean), 1)
+            if temperatures_clean
+            else 0
+        ),
+        "avg_humidity_last_7": (
+            round(sum(humidities_clean) / len(humidities_clean))
+            if humidities_clean
+            else 0
+        ),
+        "max_humidity_last_7": (
+            round(max(humidities_clean)) if humidities_clean else 0
+        ),
+        "avg_wind_speed_last_7": (
+            round(sum(winds_clean) / len(winds_clean), 1) if winds_clean else 0
+        ),
+        "max_wind_speed_last_7": (
+            round(max(winds_clean), 1) if winds_clean else 0
+        ),
+        "avg_sunshine_hours_last_7": round(total_sunshine_hours / num_days, 1),
+        "estimated_leaf_wetness_hours_last_7": leaf_wetness_hours,
     }
-
 
 def _weather_summary(
     weather_code: int | None,
