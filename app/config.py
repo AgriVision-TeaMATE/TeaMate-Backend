@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/teamate"
     ML_MODEL_URL: str = "http://localhost:8000"
+    TEA_GRADING_ML_URL: str | None = None
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8001
     DEBUG: bool = True

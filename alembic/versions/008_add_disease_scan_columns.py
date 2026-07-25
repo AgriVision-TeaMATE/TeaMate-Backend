@@ -15,6 +15,21 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Create base table (never captured by an earlier migration)
+    op.create_table(
+        "disease_scans",
+        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
+        sa.Column("field_id", sa.Uuid(as_uuid=True), sa.ForeignKey("fields.id", ondelete="CASCADE"), nullable=True, index=True),
+        sa.Column("image_url", sa.String, nullable=False),
+        sa.Column("detected_disease", sa.String(100), nullable=False),
+        sa.Column("severity", sa.String(20), nullable=False),
+        sa.Column("confidence", sa.Float, nullable=False),
+        sa.Column("treatment_suggestions", sa.JSON, nullable=True),
+        sa.Column("environmental_data", sa.JSON, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
+    )
+
     # Add missing columns
     op.add_column("disease_scans", sa.Column("scan_id", sa.String(64), unique=True, index=True, nullable=False))
     op.add_column("disease_scans", sa.Column("description", sa.String(500), nullable=True))
@@ -46,3 +61,4 @@ def downgrade() -> None:
     op.drop_column("disease_scans", "latitude")
     op.drop_column("disease_scans", "description")
     op.drop_column("disease_scans", "scan_id")
+    op.drop_table("disease_scans")

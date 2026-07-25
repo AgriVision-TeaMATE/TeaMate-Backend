@@ -5,7 +5,7 @@ import sqlalchemy as sa
 import uuid
 
 # revision identifiers, used by Alembic.
-revision = "009_add_diseases_and_risk_columns"
+revision = "009"
 # The down_revision should match the latest existing revision ID (currently "008")
 # This will be updated automatically if generated via alembic revision command.
 down_revision = "008"

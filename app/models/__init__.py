@@ -10,6 +10,7 @@ from .notification import Notification
 from .user import User
 from .disease import Disease
 from .disease_scan import DiseaseScan
+from .tea_grade_scan import TeaGradeScan
 
 __all__ = [
     "Field",
@@ -25,4 +26,5 @@ __all__ = [
     "User",
     "Disease",
     "DiseaseScan",
+    "TeaGradeScan",
 ]

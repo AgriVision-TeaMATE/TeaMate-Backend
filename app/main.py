@@ -16,6 +16,7 @@ from .routers import (
     notifications,
     weather,
     disease_scan,
+    tea_grade_scan,
 )
 
 from contextlib import asynccontextmanager
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     # Create disease-scans upload directory
     (MEDIA_DIR / "disease-scans").mkdir(parents=True, exist_ok=True)
+    (MEDIA_DIR / "tea-quality-scans").mkdir(parents=True, exist_ok=True)
     yield
 
 
@@ -63,6 +65,7 @@ app.include_router(schedules.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(weather.router, prefix="/api/v1")
 app.include_router(disease_scan.router, prefix="/api/v1")
+app.include_router(tea_grade_scan.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["System"])
