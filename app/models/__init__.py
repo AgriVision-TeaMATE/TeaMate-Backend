@@ -8,6 +8,8 @@ from .plucking_schedule import PluckingSchedule, ScheduleWorker
 from .weather_log import WeatherLog
 from .notification import Notification
 from .user import User
+from .disease import Disease
+from .disease_scan import DiseaseScan
 
 __all__ = [
     "Field",
@@ -21,4 +23,6 @@ __all__ = [
     "WeatherLog",
     "Notification",
     "User",
+    "Disease",
+    "DiseaseScan",
 ]
