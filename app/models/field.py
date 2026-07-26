@@ -44,4 +44,7 @@ class Field(Base):
     notifications = relationship(
         "Notification", back_populates="field"
     )
+    disease_scans = relationship(
+        "DiseaseScan", back_populates="field"
+    )
     user = relationship("User")

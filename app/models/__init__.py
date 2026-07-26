@@ -9,6 +9,8 @@ from .weather_log import WeatherLog
 from .notification import Notification
 from .user import User
 from .yield_settings import YieldSettings
+from .disease import Disease
+from .disease_scan import DiseaseScan
 
 __all__ = [
     "Field",
@@ -23,4 +25,6 @@ __all__ = [
     "Notification",
     "User",
     "YieldSettings",
+    "Disease",
+    "DiseaseScan",
 ]
