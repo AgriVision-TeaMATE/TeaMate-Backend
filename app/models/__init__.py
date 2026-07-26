@@ -8,6 +8,7 @@ from .plucking_schedule import PluckingSchedule, ScheduleWorker
 from .weather_log import WeatherLog
 from .notification import Notification
 from .user import User
+from .yield_settings import YieldSettings
 
 __all__ = [
     "Field",
@@ -21,4 +22,5 @@ __all__ = [
     "WeatherLog",
     "Notification",
     "User",
+    "YieldSettings",
 ]

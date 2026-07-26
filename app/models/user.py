@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 
@@ -21,4 +21,11 @@ class User(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    yield_settings = relationship(
+        "YieldSettings",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
     )

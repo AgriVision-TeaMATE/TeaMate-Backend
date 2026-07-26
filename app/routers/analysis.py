@@ -233,6 +233,15 @@ def predict_round_yield(
             status_code=400,
             detail="Completed round prediction cannot be changed.",
         )
+    if (
+        current_user.yield_settings is None
+        or current_user.yield_settings.pluckable_100_bud_weight_g is None
+        or current_user.yield_settings.arimbu_100_bud_weight_g is None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Yield settings are incomplete. Save tea variant and bud weights in Settings before predicting yield.",
+        )
 
     area = float(round_obj.field.area_hectares) if round_obj.field else 1.0
     total_pluckable_count = sum(
@@ -244,7 +253,12 @@ def predict_round_yield(
         total_captured_area_sqm=float(round_obj.total_captured_area_sqm or 0),
         total_pluckable_count=total_pluckable_count,
         total_arimbu_count=total_arimbu_count,
-        avg_pluckable_ratio=float(round_obj.pluckable_ratio or 0.0),
+        pluckable_100_bud_weight_g=float(
+            current_user.yield_settings.pluckable_100_bud_weight_g
+        ),
+        arimbu_100_bud_weight_g=float(
+            current_user.yield_settings.arimbu_100_bud_weight_g
+        ),
     )
     round_obj.predicted_yield = predicted
     db.commit()
