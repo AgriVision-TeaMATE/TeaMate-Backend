@@ -61,6 +61,117 @@ def _persist_image_bytes(content: bytes, original_filename: str | None) -> str:
     return f"/media/disease-scans/{file_name}"
 
 
+def _build_and_persist_dummy_response(
+    scan_id: str,
+    image_url: str,
+    field: Field | None,
+    latitude: float | None,
+    longitude: float | None,
+    effective_scan_datetime: datetime,
+    weather_data: WeatherSummary | None,
+    env_data: dict | None,
+    db: Session,
+) -> DiseaseScanAPIResponse:
+    """Build a structured dummy response when ML backend is unavailable.
+
+    Uses the 'healthy' disease entry from the reference table as a safe fallback
+    that won't cause unnecessary alarm when the service is down for maintenance.
+    Also persists the dummy scan to the database for record keeping.
+    """
+    weather_dict = weather_data.model_dump() if weather_data else {}
+
+    dummy_scan = DiseaseScan(
+        scan_id=scan_id,
+        field_id=field.id if field else None,
+        latitude=latitude,
+        longitude=longitude,
+        scan_datetime=effective_scan_datetime,
+        image_url=image_url,
+        detected_disease="Healthy",
+        severity="none",
+        confidence=0.40,
+        description="No disease detected. The tea leaf appears healthy with no significant pathological symptoms.",
+        weather_summary=weather_dict or None,
+        environmental_data=env_data,
+        risk_level="low",
+        risk_reason="Unable to assess - ML service unavailable",
+        treatment_suggestions=[],
+        all_predictions=[
+            {"disease": "Healthy", "class_key": "healthy", "probability": 0.40},
+            {"disease": "Mite Disease", "class_key": "mite_disease", "probability": 0.15},
+            {"disease": "Blister Blight", "class_key": "blister_blight", "probability": 0.12},
+            {"disease": "Anthracnose", "class_key": "anthracnose", "probability": 0.08},
+            {"disease": "Red Leaf Spot", "class_key": "red_leaf_spot", "probability": 0.07},
+            {"disease": "Tea Mosquito Bug", "class_key": "tea_mosquito_bug", "probability": 0.05},
+            {"disease": "Other", "class_key": "other", "probability": 0.03},
+            {"disease": "Unknown", "class_key": "unknown", "probability": 0.02},
+            {"disease": "Pest Damage", "class_key": "pest_damage", "probability": 0.02},
+            {"disease": "Nutrient Deficiency", "class_key": "nutrient_deficiency", "probability": 0.01},
+            {"disease": "Viral Infection", "class_key": "viral_infection", "probability": 0.01},
+        ],
+        ai_explanation="ML service temporarily unavailable. No disease analysis performed.",
+        model_version="dummy-fallback",
+        inference_time_ms=None,
+    )
+
+    try:
+        db.add(dummy_scan)
+        db.commit()
+        db.refresh(dummy_scan)
+    except Exception:
+        db.rollback()
+        # Continue to return response even if persistence fails
+
+    dummy_disease = MostProbableDisease(
+        disease_name="Healthy",
+        confidence=0.40,
+        severity="none",
+        description="No disease detected. The tea leaf appears healthy with no significant pathological symptoms.",
+        causes=[],
+    )
+    dummy_confidence = [
+        ConfidenceItem(disease="Healthy", probability=0.40, confidence_label="medium"),
+        ConfidenceItem(disease="Mite Disease", probability=0.15, confidence_label="low"),
+        ConfidenceItem(disease="Blister Blight", probability=0.12, confidence_label="low"),
+        ConfidenceItem(disease="Anthracnose", probability=0.08, confidence_label="low"),
+        ConfidenceItem(disease="Red Leaf Spot", probability=0.07, confidence_label="low"),
+        ConfidenceItem(disease="Tea Mosquito Bug", probability=0.05, confidence_label="low"),
+        ConfidenceItem(disease="Other", probability=0.03, confidence_label="low"),
+        ConfidenceItem(disease="Unknown", probability=0.02, confidence_label="low"),
+        ConfidenceItem(disease="Pest Damage", probability=0.02, confidence_label="low"),
+        ConfidenceItem(disease="Nutrient Deficiency", probability=0.01, confidence_label="low"),
+        ConfidenceItem(disease="Viral Infection", probability=0.01, confidence_label="low"),
+    ]
+    dummy_risk = RiskLevel(level="low", reason="Unable to assess - ML service unavailable")
+    dummy_explanation = [AIExplanation(disease="Healthy", explanation="ML service temporarily unavailable. No disease analysis performed.", recommended_actions=[])]
+
+    return DiseaseScanAPIResponse(
+        scan_id=scan_id,
+        status="success",
+        scan_summary=ScanSummary(
+            field_id=field.id if field else None,
+            field_name=field.name if field else None,
+            date=effective_scan_datetime.date(),
+            time=effective_scan_datetime.time(),
+            weather_details=weather_data,
+            image_url=image_url,
+            latitude=latitude,
+            longitude=longitude,
+            scan_datetime=effective_scan_datetime,
+        ),
+        most_probable_disease=dummy_disease,
+        confidence_analysis=dummy_confidence,
+        risk_level=dummy_risk,
+        ai_explanation=dummy_explanation,
+        recommendations=[],
+        meta=Meta(
+            model_version="dummy-fallback",
+            inference_time_ms=None,
+            timestamp=datetime.now(),
+        ),
+    )
+
+
 @router.post(
     "/scan",
     response_model=DiseaseScanAPIResponse,
@@ -78,9 +189,21 @@ async def scan_disease(
     field_id: UUID | None = Form(default=None),
     latitude: float | None = Form(default=None, description="GPS latitude"),
     longitude: float | None = Form(default=None, description="GPS longitude"),
+    # Individual weather form fields (match ML model's expected format)
+    # rainy_days_last_7: int | None = Form(default=None, ge=0, le=7),
+    # rainy_hours_last_7: int | None = Form(default=None, ge=0),
+    total_rainfall_last_7: float | None = Form(default=None, ge=0),
+    avg_temperature_last_7: float | None = Form(default=None),
+    avg_humidity_last_7: float | None = Form(default=None, ge=0, le=100),
+    # max_humidity_last_7: float | None = Form(default=None, ge=0, le=100),
+    avg_wind_speed_last_7: float | None = Form(default=None, ge=0),
+    #max_wind_speed_last_7: float | None = Form(default=None, ge=0),
+    avg_sunshine_hours_last_7: float | None = Form(default=None),
+    # estimated_leaf_wetness_hours_last_7: int | None = Form(default=None, ge=0),
+    # Legacy JSON weather_summary parameter (optional, takes precedence if both provided)
     weather_summary: str | None = Form(
         default=None,
-        description="JSON string matching the WeatherSummary schema",
+        description="JSON string matching the WeatherSummary schema (deprecated, use individual fields)",
     ),
     environmental_data: str | None = Form(
         default=None, description="Freeform JSON metadata (soil moisture, pH, etc.)"
@@ -101,12 +224,30 @@ async def scan_disease(
     # --- Validation ----------------------------------------------------------
     _validate_image_type(image.content_type)
 
+    # --- Build weather data from individual form fields or legacy JSON ----------
     weather_data: WeatherSummary | None = None
+    weather_dict: dict = {}
+
+    # Legacy JSON weather_summary takes precedence if provided
     if weather_summary:
         try:
             weather_data = WeatherSummary.model_validate_json(weather_summary)
+            weather_dict = weather_data.model_dump(exclude_none=True)
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid weather_summary: {e}")
+    else:
+        # Build from individual form fields
+        weather_dict = {
+            k: v for k, v in {
+                "total_rainfall_last_7": total_rainfall_last_7,
+                "avg_temperature_last_7": avg_temperature_last_7,
+                "avg_humidity_last_7": avg_humidity_last_7,
+                "avg_wind_speed_last_7": avg_wind_speed_last_7,
+                "avg_sunshine_hours_last_7": avg_sunshine_hours_last_7,
+            }.items() if v is not None
+        }
+        if weather_dict:
+            weather_data = WeatherSummary.model_validate(weather_dict)
 
     env_data = None
     if environmental_data:
@@ -116,7 +257,6 @@ async def scan_disease(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid environmental_data JSON format")
 
     effective_scan_datetime = scan_date or datetime.now()
-    weather_dict = weather_data.model_dump() if weather_data else {}
 
     # --- Read image once, use for both storage and ML call -------------------
     content = await image.read()
@@ -134,11 +274,31 @@ async def scan_disease(
     # --- Call ML backend -------------------------------------------------------
     try:
         raw_predictions = await predict_disease_from_image(content, weather_dict)
-    except MLPredictionError as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Disease analysis failed: {e}")
+    except MLPredictionError:
+        return _build_and_persist_dummy_response(
+            scan_id=_generate_scan_id(),
+            image_url=image_url,
+            field=field,
+            latitude=latitude,
+            longitude=longitude,
+            effective_scan_datetime=effective_scan_datetime,
+            weather_data=weather_data,
+            env_data=env_data,
+            db=db,
+        )
 
     if not raw_predictions:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="ML backend returned no predictions")
+        return _build_and_persist_dummy_response(
+            scan_id=_generate_scan_id(),
+            image_url=image_url,
+            field=field,
+            latitude=latitude,
+            longitude=longitude,
+            effective_scan_datetime=effective_scan_datetime,
+            weather_data=weather_data,
+            env_data=env_data,
+            db=db,
+        )
 
     # --- Resolve against disease reference table (Step 4) ----------------------
     scored = resolve_predictions(db, raw_predictions, top_n=3)

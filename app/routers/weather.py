@@ -29,16 +29,16 @@ class CurrentWeatherResponse(BaseModel):
 
 
 class WeeklyWeatherSummaryResponse(BaseModel):
-    rainy_days_last_7: int
-    rainy_hours_last_7: int
+    #rainy_days_last_7: int
+    #rainy_hours_last_7: int
     total_rainfall_last_7: float
     avg_temperature_last_7: float
     avg_humidity_last_7: int
-    max_humidity_last_7: int
+    # max_humidity_last_7: int
     avg_wind_speed_last_7: float
-    max_wind_speed_last_7: float
+    #max_wind_speed_last_7: float
     avg_sunshine_hours_last_7: float
-    estimated_leaf_wetness_hours_last_7: int
+    #estimated_leaf_wetness_hours_last_7: int
 
 
 @router.post("/current", response_model=CurrentWeatherResponse)
@@ -83,14 +83,9 @@ async def get_weekly_weather_summary(
     )
 
     return WeeklyWeatherSummaryResponse(
-        rainy_days_last_7=summary["rainy_days_last_7"],
-        rainy_hours_last_7=summary["rainy_hours_last_7"],
         total_rainfall_last_7=summary["total_rainfall_last_7"],
         avg_temperature_last_7=summary["avg_temperature_last_7"],
         avg_humidity_last_7=summary["avg_humidity_last_7"],
-        max_humidity_last_7=summary["max_humidity_last_7"],
         avg_wind_speed_last_7=summary["avg_wind_speed_last_7"],
-        max_wind_speed_last_7=summary["max_wind_speed_last_7"],
         avg_sunshine_hours_last_7=summary["avg_sunshine_hours_last_7"],
-        estimated_leaf_wetness_hours_last_7=summary["estimated_leaf_wetness_hours_last_7"],
     )
