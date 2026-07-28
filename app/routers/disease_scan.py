@@ -242,7 +242,7 @@ def get_scan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    scan = db.scalar(select(DiseaseScan).where(DiseaseScan.scan_id == scan_id))
+    scan = db.scalar(select(DiseaseScan).where(DiseaseScan.id == scan_id))
     if not scan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
 
@@ -254,19 +254,44 @@ def get_scan(
     return scan
 
 
-@router.get("/list", response_model=list[DiseaseScanResponse])
-def list_scans(
+# @router.get("/list", response_model=list[DiseaseScanResponse])
+# def list_scans(
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user),
+# ):
+#     stmt = (
+#         select(DiseaseScan)
+#         .join(Field, DiseaseScan.field_id == Field.id, isouter=True)
+#         .where(Field.user_id == current_user.id)
+#         .order_by(DiseaseScan.created_at.desc())
+#     )
+#     return db.scalars(stmt).all()
+
+@router.get("/by-field/{field_id}", response_model=list[DiseaseScanResponse])
+def list_scans_by_field(
+    field_id: UUID,
+    limit: int = 50,
+    offset: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    field = db.scalar(
+        select(Field).where(Field.id == field_id, Field.user_id == current_user.id)
+    )
+    if not field:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Field not found or not owned by user",
+        )
+
     stmt = (
         select(DiseaseScan)
-        .join(Field, DiseaseScan.field_id == Field.id, isouter=True)
-        .where(Field.user_id == current_user.id)
-        .order_by(DiseaseScan.created_at.desc())
+        .where(DiseaseScan.field_id == field_id)
+        .order_by(DiseaseScan.scan_datetime.desc())
+        .offset(offset)
+        .limit(limit)
     )
     return db.scalars(stmt).all()
-
 
 @router.get("/by-location/nearby", response_model=list[DiseaseScanResponse])
 def list_scans_by_location(
