@@ -18,7 +18,7 @@ class Field(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     area_hectares: Mapped[float] = mapped_column(
-        Numeric(6, 2), nullable=False
+        Numeric(10, 4), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
