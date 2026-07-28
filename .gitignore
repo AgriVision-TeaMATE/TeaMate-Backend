@@ -21,3 +21,6 @@ build/
 
 # Alembic
 alembic/versions/__pycache__/
+
+docs/
+CLAUDE.md

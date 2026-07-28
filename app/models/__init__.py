@@ -11,6 +11,7 @@ from .user import User
 from .yield_settings import YieldSettings
 from .disease import Disease
 from .disease_scan import DiseaseScan
+from .tea_grade_scan import TeaGradeScan
 
 __all__ = [
     "Field",
@@ -27,4 +28,5 @@ __all__ = [
     "YieldSettings",
     "Disease",
     "DiseaseScan",
+    "TeaGradeScan",
 ]
