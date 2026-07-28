@@ -248,6 +248,12 @@ def predict_round_yield(
         image.pluckable_count for image in round_obj.analysis_images
     )
     total_arimbu_count = sum(image.arimbu_count for image in round_obj.analysis_images)
+    if area <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Field area is 0. Update the field area before predicting yield.",
+        )
+
     predicted = calculate_predicted_yield(
         field_area_hectares=area,
         total_captured_area_sqm=float(round_obj.total_captured_area_sqm or 0),

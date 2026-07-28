@@ -2,6 +2,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 import uvicorn
 
 from .config import get_settings
@@ -26,11 +27,26 @@ MEDIA_DIR = Path(__file__).resolve().parents[1] / "media"
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _ensure_field_area_precision() -> None:
+    with engine.begin() as connection:
+      if connection.dialect.name != "postgresql":
+          return
+      connection.execute(
+          text(
+              """
+              ALTER TABLE fields
+              ALTER COLUMN area_hectares TYPE NUMERIC(10, 4)
+              """
+          )
+      )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Ensure all tables (including users) are created
     import app.models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+    _ensure_field_area_precision()
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     # Create disease-scans upload directory
     (MEDIA_DIR / "disease-scans").mkdir(parents=True, exist_ok=True)

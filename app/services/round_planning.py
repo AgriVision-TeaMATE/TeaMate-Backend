@@ -5,7 +5,10 @@ from sqlalchemy.orm import Session
 
 from ..models import HarvestRound, Notification, WeatherLog
 from ..models.notification import AlertSeverity, NotificationCategory
+from ..config import get_settings
 from .weather_provider import fetch_weather_snapshot
+
+settings = get_settings()
 
 
 def weather_action_for_sms(weather: dict) -> str:
@@ -29,7 +32,14 @@ async def build_round_plan(
         1, ceil(predicted_yield / max(kg_per_worker_per_day, 1))
     ) if predicted_yield > 0 else 1
 
-    weather = await fetch_weather_snapshot()
+    field = round_obj.field
+    latitude = getattr(field, "latitude", None) or settings.DEFAULT_WEATHER_LAT
+    longitude = getattr(field, "longitude", None) or settings.DEFAULT_WEATHER_LON
+
+    weather = await fetch_weather_snapshot(
+        latitude=float(latitude),
+        longitude=float(longitude),
+    )
     weather_log = round_obj.weather_log
     if not weather_log:
         weather_log = WeatherLog(harvest_round_id=round_obj.id, **weather)
