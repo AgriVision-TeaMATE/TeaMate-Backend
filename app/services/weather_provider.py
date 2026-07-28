@@ -123,16 +123,16 @@ async def fetch_last_week_summary(
 
     if not rows:
         return {
-            "rainy_days_last_7": 0,
-            "rainy_hours_last_7": 0,
+            # "rainy_days_last_7": 0,
+            # "rainy_hours_last_7": 0,
             "total_rainfall_last_7": 0,
             "avg_temperature_last_7": 0,
             "avg_humidity_last_7": 0,
-            "max_humidity_last_7": 0,
+            # "max_humidity_last_7": 0,
             "avg_wind_speed_last_7": 0,
-            "max_wind_speed_last_7": 0,
+            # "max_wind_speed_last_7": 0,
             "avg_sunshine_hours_last_7": 0,
-            "estimated_leaf_wetness_hours_last_7": 0,
+            # "estimated_leaf_wetness_hours_last_7": 0,
         }
 
     temperatures_clean = [r["temperature"] for r in rows if r["temperature"] is not None]
@@ -159,8 +159,8 @@ async def fetch_last_week_summary(
     )
 
     return {
-        "rainy_days_last_7": rainy_days,
-        "rainy_hours_last_7": rainy_hours,
+        # "rainy_days_last_7": rainy_days,
+        # "rainy_hours_last_7": rainy_hours,
         "total_rainfall_last_7": total_rainfall,
         "avg_temperature_last_7": (
             round(sum(temperatures_clean) / len(temperatures_clean), 1)
@@ -172,17 +172,17 @@ async def fetch_last_week_summary(
             if humidities_clean
             else 0
         ),
-        "max_humidity_last_7": (
-            round(max(humidities_clean)) if humidities_clean else 0
-        ),
+        # "max_humidity_last_7": (
+        #     round(max(humidities_clean)) if humidities_clean else 0
+        # ),
         "avg_wind_speed_last_7": (
             round(sum(winds_clean) / len(winds_clean), 1) if winds_clean else 0
         ),
-        "max_wind_speed_last_7": (
-            round(max(winds_clean), 1) if winds_clean else 0
-        ),
+        # "max_wind_speed_last_7": (
+        #     round(max(winds_clean), 1) if winds_clean else 0
+        # ),
         "avg_sunshine_hours_last_7": round(total_sunshine_hours / num_days, 1),
-        "estimated_leaf_wetness_hours_last_7": leaf_wetness_hours,
+        # "estimated_leaf_wetness_hours_last_7": leaf_wetness_hours,
     }
 
 def _weather_summary(

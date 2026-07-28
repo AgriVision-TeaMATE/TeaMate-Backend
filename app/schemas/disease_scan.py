@@ -8,16 +8,16 @@ class WeatherSummary(BaseModel):
     """Rolling 7-day weather aggregates, matching /weather/weekly-summary
     and the fields the ML backend expects."""
 
-    rainy_days_last_7: int | None = Field(default=None, ge=0, le=7)
-    rainy_hours_last_7: int | None = Field(default=None, ge=0)
+    # rainy_days_last_7: int | None = Field(default=None, ge=0, le=7)
+    # rainy_hours_last_7: int | None = Field(default=None, ge=0)
     total_rainfall_last_7: float | None = Field(default=None, ge=0)
     avg_temperature_last_7: float | None = None
     avg_humidity_last_7: float | None = Field(default=None, ge=0, le=100)
-    max_humidity_last_7: float | None = Field(default=None, ge=0, le=100)
+    # max_humidity_last_7: float | None = Field(default=None, ge=0, le=100)
     avg_wind_speed_last_7: float | None = Field(default=None, ge=0)
-    max_wind_speed_last_7: float | None = Field(default=None, ge=0)
+    # max_wind_speed_last_7: float | None = Field(default=None, ge=0)
     avg_sunshine_hours_last_7: float | None = None
-    estimated_leaf_wetness_hours_last_7: int | None = Field(default=None, ge=0)
+    # estimated_leaf_wetness_hours_last_7: int | None = Field(default=None, ge=0)
 
 
 class DiseaseScanCreate(BaseModel):
