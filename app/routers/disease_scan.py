@@ -28,7 +28,7 @@ from ..services.disease_analysis import (
 )
 from ..services.disease_ml_client import (
     MLPredictionError,
-    predict_disease_from_image,
+    predict_disease_from_images,
 )
 
 router = APIRouter(prefix="/disease", tags=["Disease Scan"])
@@ -75,16 +75,16 @@ def _persist_image_bytes(content: bytes, original_filename: str | None) -> str:
     "/scan",
     response_model=DiseaseScanAPIResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Analyze a tea leaf image for disease",
+    summary="Analyze multiple tea leaf images for disease",
     description=(
-        "Accepts a leaf image plus optional field, GPS, weather, and "
+        "Accepts multiple leaf images plus optional field, GPS, weather, and "
         "environmental metadata as multipart/form-data. Sends the image + "
         "weather to the ML backend for classification, applies weather-based "
         "risk rules, resolves disease reference info, and persists the scan."
     ),
 )
 async def scan_disease(
-    image: UploadFile = File(..., description="Leaf image (jpeg/png/webp)"),
+    images: list[UploadFile] = File(..., description="Leaf images (jpeg/png/webp)"),
     field_id: UUID | None = Form(default=None),
     latitude: float | None = Form(default=None, description="GPS latitude"),
     longitude: float | None = Form(default=None, description="GPS longitude"),
@@ -109,8 +109,8 @@ async def scan_disease(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Field not found or not owned by user")
 
     # --- Validation ----------------------------------------------------------
-    _validate_image_type(image.content_type)
-
+    for image in images:
+        _validate_image_type(image.content_type)
     weather_data: WeatherSummary | None = None
     if weather_summary:
         try:
@@ -128,27 +128,58 @@ async def scan_disease(
     effective_scan_datetime = scan_date or datetime.now()
     weather_dict = weather_data.model_dump() if weather_data else {}
 
-    # --- Read image once, use for both storage and ML call -------------------
-    content = await image.read()
-    if len(content) > MAX_IMAGE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Image exceeds max size of {MAX_IMAGE_SIZE_BYTES // (1024 * 1024)}MB",
+    # --- Read multiple images once, use for storage and ML call -------------------
+
+    image_contents = []
+
+    for image in images:
+        content = await image.read()
+
+        if len(content) > MAX_IMAGE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Image {image.filename} exceeds max size of {MAX_IMAGE_SIZE_BYTES // (1024 * 1024)}MB",
+            )
+
+        image_contents.append(
+            (
+                image.filename,
+                content,
+            )
         )
 
+
+    image_urls = []
+
     try:
-        image_url = _persist_image_bytes(content, image.filename)
+        for filename, content in image_contents:
+            image_urls.append(
+                _persist_image_bytes(
+                    content,
+                    filename,
+                )
+            )
+
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to store image: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to store images: {e}",
+        )
 
     # --- Call ML backend -------------------------------------------------------
     try:
-        raw_predictions = await predict_disease_from_image(content, weather_dict)
-    except MLPredictionError as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Disease analysis failed: {e}")
+        batch_result = await predict_disease_from_images(
+            image_contents,
+            weather_dict,
+        )
 
-    if not raw_predictions:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="ML backend returned no predictions")
+        raw_predictions = batch_result.predictions
+
+    except MLPredictionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Disease analysis failed: {e}",
+        )
 
     # --- Resolve against disease reference table (Step 4) ----------------------
     scored = resolve_predictions(db, raw_predictions, top_n=3)
@@ -183,7 +214,7 @@ async def scan_disease(
         latitude=latitude,
         longitude=longitude,
         scan_datetime=effective_scan_datetime,
-        image_url=image_url,
+        image_urls=image_urls,
         detected_disease=top.disease.name,
         severity=top.disease.severity_default,
         confidence=top.probability,
@@ -206,9 +237,15 @@ async def scan_disease(
         db.add(disease_scan)
         db.commit()
         db.refresh(disease_scan)
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save scan record")
+
+        print("SAVE ERROR:", repr(e))
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     # --- Build response ------------------------------------------------------------
     return DiseaseScanAPIResponse(
@@ -221,7 +258,7 @@ async def scan_disease(
         date=effective_scan_datetime.date(),
         time=effective_scan_datetime.time(),
         weather_details=weather_data,
-        image_url=image_url,
+        image_urls=image_urls,
         latitude=latitude,
         longitude=longitude,
         scan_datetime=effective_scan_datetime,
@@ -254,6 +291,12 @@ async def scan_disease(
     ),
 
     recommendations=top.disease.recommendations,
+
+    processed_images=batch_result.processed_images,
+
+    failed_images=batch_result.failed_images,
+
+    explanation=batch_result.explanation,
 
     meta=Meta(
         model_version=disease_scan.model_version,

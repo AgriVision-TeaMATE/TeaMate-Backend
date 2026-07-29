@@ -37,7 +37,7 @@ class DiseaseScanResponse(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     scan_datetime: datetime
-    image_url: str
+    image_urls: list[str]
     detected_disease: str
     severity: str
     confidence: float
@@ -86,6 +86,15 @@ class RiskLevel(BaseModel):
     level: str
     reason: str
 
+class ImageExplanation(BaseModel):
+    filename: str
+    gradcam_image: str
+    environment_factors: list[dict]
+
+
+class ExplanationResponse(BaseModel):
+    per_image: list[ImageExplanation]
+    aggregated_gradcam: str | None = None
 
 class ScanSummary(BaseModel):
     field_id: UUID | None = None
@@ -93,7 +102,7 @@ class ScanSummary(BaseModel):
     date: date
     time: time
     weather_details: WeatherSummary | None = None
-    image_url: str
+    image_urls: list[str]
     latitude: float | None = None
     longitude: float | None = None
     scan_datetime: datetime
@@ -111,8 +120,9 @@ class DiseaseScanAPIResponse(BaseModel):
     scan_summary: ScanSummary
     most_probable_disease: MostProbableDisease
     confidence_analysis: list[ConfidenceItem]
-    # risk_level: RiskLevel
-    # ai_explanation: list[AIExplanation]
     recommendations: list[str]
+    explanation: ExplanationResponse | None = None
+    processed_images: int
+    failed_images: list[str]
     meta: Meta
     classification: Classification

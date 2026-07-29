@@ -17,7 +17,7 @@ class DiseaseScan(Base):
         ForeignKey("fields.id", ondelete="CASCADE"), nullable=True, index=True
     )
 
-    image_url: Mapped[str] = mapped_column(String, nullable=False)
+    image_urls: Mapped[list] = mapped_column(JSON, nullable=False)
 
     detected_disease: Mapped[str] = mapped_column(String(100), nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
