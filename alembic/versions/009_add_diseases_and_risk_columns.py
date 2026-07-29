@@ -5,10 +5,8 @@ import sqlalchemy as sa
 import uuid
 
 # revision identifiers, used by Alembic.
-revision = "009"
-# The down_revision should match the latest existing revision ID (currently "008")
-# This will be updated automatically if generated via alembic revision command.
-down_revision = "008"
+revision = "009_add_diseases_and_risk_columns"
+down_revision = "008_yield_settings"
 branch_labels = None
 depends_on = None
 
@@ -21,6 +19,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4),
         sa.Column("class_key", sa.String(100), nullable=False, unique=True, index=True),
         sa.Column("name", sa.String(100), nullable=False),
+        sa.Column("category", sa.String(50), nullable=True, server_default="Unknown" ),
         sa.Column("description", sa.String(1000), nullable=False),
         sa.Column("causes", sa.JSON, nullable=False, server_default=sa.text("'[]'")),
         sa.Column("recommendations", sa.JSON, nullable=False, server_default=sa.text("'[]'")),

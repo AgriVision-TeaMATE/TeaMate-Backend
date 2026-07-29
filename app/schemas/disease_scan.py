@@ -66,7 +66,15 @@ class ConfidenceItem(BaseModel):
     disease: str
     probability: float
     confidence_label: str
+    category: str
 
+
+class Classification(BaseModel):
+    level: str
+    label: str
+    confidence: float
+    category: str | None = None
+    message: str
 
 class AIExplanation(BaseModel):
     disease: str
@@ -103,7 +111,8 @@ class DiseaseScanAPIResponse(BaseModel):
     scan_summary: ScanSummary
     most_probable_disease: MostProbableDisease
     confidence_analysis: list[ConfidenceItem]
-    risk_level: RiskLevel
-    ai_explanation: list[AIExplanation]
+    # risk_level: RiskLevel
+    # ai_explanation: list[AIExplanation]
     recommendations: list[str]
     meta: Meta
+    classification: Classification

@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "008"
-down_revision = "007"
+revision = "008_yield_settings"
+down_revision = "008"
 branch_labels = None
 depends_on = None
 

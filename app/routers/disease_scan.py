@@ -12,27 +12,37 @@ from ..database import get_db
 from ..dependencies.auth import get_current_user
 from ..models import DiseaseScan, Field, User
 from ..schemas.disease_scan import (
-    AIExplanation,
     ConfidenceItem,
+    Classification,
     DiseaseScanAPIResponse,
     DiseaseScanResponse,
     Meta,
     MostProbableDisease,
-    RiskLevel,
     ScanSummary,
     WeatherSummary,
 )
-from ..services.disease_analysis import build_ai_explanation, resolve_predictions
-from ..services.disease_ml_client import MLPredictionError, predict_disease_from_image
-from ..services.risk_engine import assess_risk
+from ..services.disease_analysis import (
+    classify_result,
+    resolve_predictions,
+    _classification_message,
+)
+from ..services.disease_ml_client import (
+    MLPredictionError,
+    predict_disease_from_image,
+)
 
 router = APIRouter(prefix="/disease", tags=["Disease Scan"])
 
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / "media" / "disease-scans"
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
-MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/jpg",
+}
 
+MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
 
 def _validate_image_type(content_type: str | None) -> None:
     if content_type not in ALLOWED_IMAGE_TYPES:
@@ -142,6 +152,7 @@ async def scan_disease(
 
     # --- Resolve against disease reference table (Step 4) ----------------------
     scored = resolve_predictions(db, raw_predictions, top_n=3)
+    classification = classify_result(scored)
     if not scored:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -151,17 +162,17 @@ async def scan_disease(
     top = scored[0]
 
     # --- Risk analysis (Step 3, rule-based) -------------------------------------
-    risk = assess_risk(weather_dict)
+    # risk = assess_risk(weather_dict)
 
     # --- AI explanations per top prediction (Step 5) -----------------------------
-    explanations = [
-        AIExplanation(
-            disease=s.disease.name,
-            explanation=build_ai_explanation(s.disease, risk),
-            recommended_actions=s.disease.recommendations,
-        )
-        for s in scored
-    ]
+    # explanations = [
+    #     AIExplanation(
+    #         disease=s.disease.name,
+    #         explanation=build_ai_explanation(s.disease, risk),
+    #         recommended_actions=s.disease.recommendations,
+    #     )
+    #     for s in scored
+    # ]
 
     scan_id = _generate_scan_id()
 
@@ -179,14 +190,14 @@ async def scan_disease(
         description=top.disease.description,
         weather_summary=weather_dict or None,
         environmental_data=env_data,
-        risk_level=risk.level,
-        risk_reason=risk.reason,
+        # risk_level=risk.level,
+        # risk_reason=risk.reason,
         treatment_suggestions=top.disease.recommendations,
         all_predictions=[
             {"disease": s.disease.name, "class_key": s.disease.class_key, "probability": s.probability}
             for s in scored
         ],
-        ai_explanation=explanations[0].explanation,
+        # ai_explanation=explanations[0].explanation,
         model_version="ml-backend",  # replace once ML backend reports its own version
         inference_time_ms=None,  # populate once ML backend reports timing
     )
@@ -201,40 +212,55 @@ async def scan_disease(
 
     # --- Build response ------------------------------------------------------------
     return DiseaseScanAPIResponse(
-        scan_id=scan_id,
-        status="success",
-        scan_summary=ScanSummary(
-            field_id=field_id,
-            field_name=field.name if field else None,
-            date=effective_scan_datetime.date(),
-            time=effective_scan_datetime.time(),
-            weather_details=weather_data,
-            image_url=image_url,
-            latitude=latitude,
-            longitude=longitude,
-            scan_datetime=effective_scan_datetime,
-        ),
-        most_probable_disease=MostProbableDisease(
-            disease_name=top.disease.name,
-            confidence=top.probability,
-            severity=top.disease.severity_default,
-            description=top.disease.description,
-            causes=top.disease.causes,
-        ),
-        confidence_analysis=[
-            ConfidenceItem(disease=s.disease.name, probability=s.probability, confidence_label=s.confidence)
-            for s in scored
-        ],
-        risk_level=RiskLevel(level=risk.level, reason=risk.reason),
-        ai_explanation=explanations,
-        recommendations=top.disease.recommendations,
-        meta=Meta(
-            model_version=disease_scan.model_version,
-            inference_time_ms=disease_scan.inference_time_ms,
-            timestamp=datetime.now(),
-        ),
-    )
+    scan_id=scan_id,
+    status="success",
 
+    scan_summary=ScanSummary(
+        field_id=field_id,
+        field_name=field.name if field else None,
+        date=effective_scan_datetime.date(),
+        time=effective_scan_datetime.time(),
+        weather_details=weather_data,
+        image_url=image_url,
+        latitude=latitude,
+        longitude=longitude,
+        scan_datetime=effective_scan_datetime,
+    ),
+
+    most_probable_disease=MostProbableDisease(
+        disease_name=top.disease.name,
+        confidence=top.probability,
+        severity=top.disease.severity_default,
+        description=top.disease.description,
+        causes=top.disease.causes,
+    ),
+
+    confidence_analysis=[
+        ConfidenceItem(
+            disease=s.disease.name,
+            probability=s.probability,
+            confidence_label=s.confidence,
+            category=s.disease.category,
+        )
+        for s in scored
+    ],
+
+    classification=Classification(
+        level=classification.level,
+        label=classification.label,
+        confidence=classification.confidence,
+        category=classification.category,
+        message=_classification_message(classification),
+    ),
+
+    recommendations=top.disease.recommendations,
+
+    meta=Meta(
+        model_version=disease_scan.model_version,
+        inference_time_ms=disease_scan.inference_time_ms,
+        timestamp=datetime.now(),
+    ),
+)
 
 @router.get("/{scan_id}", response_model=DiseaseScanResponse)
 def get_scan(
@@ -252,7 +278,6 @@ def get_scan(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this scan")
 
     return scan
-
 
 # @router.get("/list", response_model=list[DiseaseScanResponse])
 # def list_scans(
