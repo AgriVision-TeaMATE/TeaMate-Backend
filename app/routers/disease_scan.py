@@ -3,11 +3,9 @@ import random
 from datetime import datetime
 from pathlib import Path
 from uuid import UUID
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from ..database import get_db
 from ..dependencies.auth import get_current_user
 from ..models import DiseaseScan, Field, User
@@ -29,6 +27,9 @@ from ..services.disease_analysis import (
 from ..services.disease_ml_client import (
     MLPredictionError,
     predict_disease_from_images,
+)
+from ..services.environment_explanation import (
+    interpret_environment_factors,
 )
 
 router = APIRouter(prefix="/disease", tags=["Disease Scan"])
@@ -181,6 +182,24 @@ async def scan_disease(
             detail=f"Disease analysis failed: {e}",
         )
 
+    environment_factors = []
+
+    if batch_result.explanation:
+        for image_explanation in batch_result.explanation.get(
+            "per_image",
+            []
+        ):
+            environment_factors.extend(
+                image_explanation.get(
+                    "environment_factors",
+                    []
+                )
+            )
+
+    environmental_explanation = interpret_environment_factors(
+        environment_factors
+    )
+
     # --- Resolve against disease reference table (Step 4) ----------------------
     scored = resolve_predictions(db, raw_predictions, top_n=3)
     classification = classify_result(scored)
@@ -206,6 +225,29 @@ async def scan_disease(
     # ]
 
     scan_id = _generate_scan_id()
+    print("================ DEBUG BATCH RESULT ================")
+
+    print(
+        "EXPLANATION:",
+        batch_result.explanation
+    )
+
+    print(
+        "ENV SUMMARY:",
+        batch_result.environmental_summary
+    )
+
+    print(
+        "ENV INSIGHTS:",
+        batch_result.environmental_insights
+    )
+
+    print(
+        "ENV TECH SUMMARY:",
+        batch_result.environmental_technical_summary
+    )
+
+    print("================ END DEBUG =========================")
 
     # --- Persist (Step 6) --------------------------------------------------------
     disease_scan = DiseaseScan(
@@ -221,16 +263,21 @@ async def scan_disease(
         description=top.disease.description,
         weather_summary=weather_dict or None,
         environmental_data=env_data,
-        # risk_level=risk.level,
-        # risk_reason=risk.reason,
+        explanation_data=(
+            batch_result.explanation
+            if batch_result.explanation
+            else None
+        ),
+        environmental_summary=batch_result.environmental_summary,
+        environmental_insights=batch_result.environmental_insights,
+        environmental_technical_summary=batch_result.environmental_technical_summary,
         treatment_suggestions=top.disease.recommendations,
         all_predictions=[
             {"disease": s.disease.name, "class_key": s.disease.class_key, "probability": s.probability}
             for s in scored
         ],
-        # ai_explanation=explanations[0].explanation,
-        model_version="ml-backend",  # replace once ML backend reports its own version
-        inference_time_ms=None,  # populate once ML backend reports timing
+        model_version="ml-backend",
+        inference_time_ms=None,
     )
 
     try:
@@ -298,6 +345,18 @@ async def scan_disease(
 
     explanation=batch_result.explanation,
 
+    environmental_summary=environmental_explanation[
+        "environmental_summary"
+    ],
+
+    environmental_insights=environmental_explanation[
+        "environmental_insights"
+    ],
+
+    environmental_technical_summary=environmental_explanation[
+        "environmental_technical_summary"
+    ],
+
     meta=Meta(
         model_version=disease_scan.model_version,
         inference_time_ms=disease_scan.inference_time_ms,
@@ -311,7 +370,10 @@ def get_scan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    scan = db.scalar(select(DiseaseScan).where(DiseaseScan.id == scan_id))
+    scan = db.scalar(
+        select(DiseaseScan)
+        .where(DiseaseScan.scan_id == scan_id)
+    )
     if not scan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
 
@@ -321,19 +383,6 @@ def get_scan(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this scan")
 
     return scan
-
-# @router.get("/list", response_model=list[DiseaseScanResponse])
-# def list_scans(
-#     db: Session = Depends(get_db),
-#     current_user: User = Depends(get_current_user),
-# ):
-#     stmt = (
-#         select(DiseaseScan)
-#         .join(Field, DiseaseScan.field_id == Field.id, isouter=True)
-#         .where(Field.user_id == current_user.id)
-#         .order_by(DiseaseScan.created_at.desc())
-#     )
-#     return db.scalars(stmt).all()
 
 @router.get("/by-field/{field_id}", response_model=list[DiseaseScanResponse])
 def list_scans_by_field(

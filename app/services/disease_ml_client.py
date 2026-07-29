@@ -30,6 +30,10 @@ class BatchPredictionResult:
     processed_images: int
     failed_images: list[str]
 
+    environmental_summary: str | None = None
+    environmental_insights: list | None = None
+    environmental_technical_summary: dict | None = None
+
 
 class MLPredictionError(Exception):
     """Raised when the ML backend call fails or returns an unusable response."""
@@ -132,8 +136,20 @@ async def predict_disease_from_images(
 
 
     return BatchPredictionResult(
-        predictions=predictions,
-        explanation=data.get("explanation", {}),
-        processed_images=data.get("processed_images", 0),
-        failed_images=data.get("failed_images", []),
-    )
+    predictions=predictions,
+    explanation=data.get("explanation", {}),
+    processed_images=data.get("processed_images", 0),
+    failed_images=data.get("failed_images", []),
+
+    environmental_summary=data.get(
+        "environmental_summary"
+    ),
+
+    environmental_insights=data.get(
+        "environmental_insights"
+    ),
+
+    environmental_technical_summary=data.get(
+        "environmental_technical_summary"
+    ),
+)
