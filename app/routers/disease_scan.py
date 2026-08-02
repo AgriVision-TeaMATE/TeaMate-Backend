@@ -3,11 +3,9 @@ import random
 from datetime import datetime
 from pathlib import Path
 from uuid import UUID
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from ..database import get_db
 from ..dependencies.auth import get_current_user
 from ..models import DiseaseScan, Field, User
@@ -28,7 +26,10 @@ from ..services.disease_analysis import (
 )
 from ..services.disease_ml_client import (
     MLPredictionError,
-    predict_disease_from_image,
+    predict_disease_from_images,
+)
+from ..services.environment_explanation import (
+    interpret_environment_factors,
 )
 
 router = APIRouter(prefix="/disease", tags=["Disease Scan"])
@@ -75,16 +76,16 @@ def _persist_image_bytes(content: bytes, original_filename: str | None) -> str:
     "/scan",
     response_model=DiseaseScanAPIResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Analyze a tea leaf image for disease",
+    summary="Analyze multiple tea leaf images for disease",
     description=(
-        "Accepts a leaf image plus optional field, GPS, weather, and "
+        "Accepts multiple leaf images plus optional field, GPS, weather, and "
         "environmental metadata as multipart/form-data. Sends the image + "
         "weather to the ML backend for classification, applies weather-based "
         "risk rules, resolves disease reference info, and persists the scan."
     ),
 )
 async def scan_disease(
-    image: UploadFile = File(..., description="Leaf image (jpeg/png/webp)"),
+    images: list[UploadFile] = File(..., description="Leaf images (jpeg/png/webp)"),
     field_id: UUID | None = Form(default=None),
     latitude: float | None = Form(default=None, description="GPS latitude"),
     longitude: float | None = Form(default=None, description="GPS longitude"),
@@ -109,8 +110,8 @@ async def scan_disease(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Field not found or not owned by user")
 
     # --- Validation ----------------------------------------------------------
-    _validate_image_type(image.content_type)
-
+    for image in images:
+        _validate_image_type(image.content_type)
     weather_data: WeatherSummary | None = None
     if weather_summary:
         try:
@@ -128,27 +129,76 @@ async def scan_disease(
     effective_scan_datetime = scan_date or datetime.now()
     weather_dict = weather_data.model_dump() if weather_data else {}
 
-    # --- Read image once, use for both storage and ML call -------------------
-    content = await image.read()
-    if len(content) > MAX_IMAGE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Image exceeds max size of {MAX_IMAGE_SIZE_BYTES // (1024 * 1024)}MB",
+    # --- Read multiple images once, use for storage and ML call -------------------
+
+    image_contents = []
+
+    for image in images:
+        content = await image.read()
+
+        if len(content) > MAX_IMAGE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Image {image.filename} exceeds max size of {MAX_IMAGE_SIZE_BYTES // (1024 * 1024)}MB",
+            )
+
+        image_contents.append(
+            (
+                image.filename,
+                content,
+            )
         )
 
+
+    image_urls = []
+
     try:
-        image_url = _persist_image_bytes(content, image.filename)
+        for filename, content in image_contents:
+            image_urls.append(
+                _persist_image_bytes(
+                    content,
+                    filename,
+                )
+            )
+
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to store image: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to store images: {e}",
+        )
 
     # --- Call ML backend -------------------------------------------------------
     try:
-        raw_predictions = await predict_disease_from_image(content, weather_dict)
-    except MLPredictionError as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Disease analysis failed: {e}")
+        batch_result = await predict_disease_from_images(
+            image_contents,
+            weather_dict,
+        )
 
-    if not raw_predictions:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="ML backend returned no predictions")
+        raw_predictions = batch_result.predictions
+
+    except MLPredictionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Disease analysis failed: {e}",
+        )
+
+    environment_factors = []
+
+    if batch_result.explanation:
+        for image_explanation in batch_result.explanation.get(
+            "per_image",
+            []
+        ):
+            environment_factors.extend(
+                image_explanation.get(
+                    "environment_factors",
+                    []
+                )
+            )
+
+    environmental_explanation = interpret_environment_factors(
+        environment_factors
+    )
 
     # --- Resolve against disease reference table (Step 4) ----------------------
     scored = resolve_predictions(db, raw_predictions, top_n=3)
@@ -175,6 +225,29 @@ async def scan_disease(
     # ]
 
     scan_id = _generate_scan_id()
+    print("================ DEBUG BATCH RESULT ================")
+
+    print(
+        "EXPLANATION:",
+        batch_result.explanation
+    )
+
+    print(
+        "ENV SUMMARY:",
+        batch_result.environmental_summary
+    )
+
+    print(
+        "ENV INSIGHTS:",
+        batch_result.environmental_insights
+    )
+
+    print(
+        "ENV TECH SUMMARY:",
+        batch_result.environmental_technical_summary
+    )
+
+    print("================ END DEBUG =========================")
 
     # --- Persist (Step 6) --------------------------------------------------------
     disease_scan = DiseaseScan(
@@ -183,32 +256,43 @@ async def scan_disease(
         latitude=latitude,
         longitude=longitude,
         scan_datetime=effective_scan_datetime,
-        image_url=image_url,
+        image_urls=image_urls,
         detected_disease=top.disease.name,
         severity=top.disease.severity_default,
         confidence=top.probability,
         description=top.disease.description,
         weather_summary=weather_dict or None,
         environmental_data=env_data,
-        # risk_level=risk.level,
-        # risk_reason=risk.reason,
+        explanation_data=(
+            batch_result.explanation
+            if batch_result.explanation
+            else None
+        ),
+        environmental_summary=batch_result.environmental_summary,
+        environmental_insights=batch_result.environmental_insights,
+        environmental_technical_summary=batch_result.environmental_technical_summary,
         treatment_suggestions=top.disease.recommendations,
         all_predictions=[
             {"disease": s.disease.name, "class_key": s.disease.class_key, "probability": s.probability}
             for s in scored
         ],
-        # ai_explanation=explanations[0].explanation,
-        model_version="ml-backend",  # replace once ML backend reports its own version
-        inference_time_ms=None,  # populate once ML backend reports timing
+        model_version="ml-backend",
+        inference_time_ms=None,
     )
 
     try:
         db.add(disease_scan)
         db.commit()
         db.refresh(disease_scan)
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save scan record")
+
+        print("SAVE ERROR:", repr(e))
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     # --- Build response ------------------------------------------------------------
     return DiseaseScanAPIResponse(
@@ -221,7 +305,7 @@ async def scan_disease(
         date=effective_scan_datetime.date(),
         time=effective_scan_datetime.time(),
         weather_details=weather_data,
-        image_url=image_url,
+        image_urls=image_urls,
         latitude=latitude,
         longitude=longitude,
         scan_datetime=effective_scan_datetime,
@@ -255,6 +339,24 @@ async def scan_disease(
 
     recommendations=top.disease.recommendations,
 
+    processed_images=batch_result.processed_images,
+
+    failed_images=batch_result.failed_images,
+
+    explanation=batch_result.explanation,
+
+    environmental_summary=environmental_explanation[
+        "environmental_summary"
+    ],
+
+    environmental_insights=environmental_explanation[
+        "environmental_insights"
+    ],
+
+    environmental_technical_summary=environmental_explanation[
+        "environmental_technical_summary"
+    ],
+
     meta=Meta(
         model_version=disease_scan.model_version,
         inference_time_ms=disease_scan.inference_time_ms,
@@ -268,7 +370,10 @@ def get_scan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    scan = db.scalar(select(DiseaseScan).where(DiseaseScan.id == scan_id))
+    scan = db.scalar(
+        select(DiseaseScan)
+        .where(DiseaseScan.scan_id == scan_id)
+    )
     if not scan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
 
@@ -278,19 +383,6 @@ def get_scan(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this scan")
 
     return scan
-
-# @router.get("/list", response_model=list[DiseaseScanResponse])
-# def list_scans(
-#     db: Session = Depends(get_db),
-#     current_user: User = Depends(get_current_user),
-# ):
-#     stmt = (
-#         select(DiseaseScan)
-#         .join(Field, DiseaseScan.field_id == Field.id, isouter=True)
-#         .where(Field.user_id == current_user.id)
-#         .order_by(DiseaseScan.created_at.desc())
-#     )
-#     return db.scalars(stmt).all()
 
 @router.get("/by-field/{field_id}", response_model=list[DiseaseScanResponse])
 def list_scans_by_field(
