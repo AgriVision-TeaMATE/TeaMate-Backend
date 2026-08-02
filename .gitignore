@@ -24,3 +24,9 @@ alembic/versions/__pycache__/
 
 docs/
 CLAUDE.md
+
+# Generated GradCAM/SHAP explanation images
+explanations/generated/
+
+# Uploaded/generated scan media
+media/
