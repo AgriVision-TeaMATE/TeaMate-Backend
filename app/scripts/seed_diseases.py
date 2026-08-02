@@ -175,24 +175,25 @@ DISEASES = [
     },
 
     {
-        "id": "c1d1e2f3-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+        "id": "84ea94f8-ec76-48bf-a389-34008145c846",
         "class_key": "Nutrient_deficiency_Mg",
-        "name": "Magnesium Deficiency",
+        "name": "Nutrient Deficiency (Magnesium)",
         "description": (
-            "Nutritional disorder caused by insufficient magnesium uptake, "
-            "producing interveinal chlorosis (yellowing) on mature leaves "
-            "while veins remain green."
+            "Magnesium deficiency causing interveinal chlorosis (yellowing "
+            "between leaf veins) on mature tea leaves, reducing photosynthesis "
+            "and yield."
         ),
         "causes": [
-            "Magnesium-poor or leached, acidic soils",
-            "Excessive potassium or nitrogen fertilization competing with magnesium uptake",
-            "Poor root development limiting nutrient absorption",
+            "Low magnesium content in soil",
+            "Soil acidity limiting magnesium uptake",
+            "Excessive potassium fertilization competing with magnesium uptake",
+            "Poor root health limiting nutrient absorption",
         ],
         "recommendations": [
-            "Apply magnesium sulfate (Epsom salt) as soil or foliar treatment",
-            "Balance NPK fertilization to avoid excess potassium",
-            "Conduct soil testing to confirm magnesium levels",
-            "Improve soil organic matter to aid nutrient retention",
+            "Apply magnesium sulfate (Epsom salt) as a soil or foliar treatment",
+            "Conduct soil testing to confirm the deficiency",
+            "Balance potassium fertilization to avoid antagonism with magnesium uptake",
+            "Improve soil pH management to enhance nutrient availability",
         ],
         "severity_default": "medium",
         "category": "Nutritional Stress",
