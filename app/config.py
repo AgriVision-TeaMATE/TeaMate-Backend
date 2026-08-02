@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     DEFAULT_WEATHER_LAT: float = 6.9271
     DEFAULT_WEATHER_LON: float = 80.6005
     SMS_PROVIDER: str = "mock"
+    base_url: str = "http://localhost:8001"
 
     @field_validator("DEBUG", mode="before")
     @classmethod

@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 import uvicorn
+from pathlib import Path
 
 from .config import get_settings
 from .database import engine, Base
@@ -61,6 +62,14 @@ app = FastAPI(
     description="FastAPI + PostgreSQL service connecting mobile app and ML model.",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+Path("explanations/generated").mkdir(parents=True, exist_ok=True)
+
+app.mount(
+    "/explanations/generated",
+    StaticFiles(directory="explanations/generated"),
+    name="explanations",
 )
 
 # Allow mobile app connections (CORS)

@@ -1,5 +1,7 @@
+import os
 from collections import defaultdict
 
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8001")
 
 FEATURE_MESSAGES = {
     "avg_wind_speed_last_7": {
@@ -43,6 +45,13 @@ FEATURE_MESSAGES = {
     },
 }
 
+def to_public_url(local_path: str | None):
+    if not local_path:
+        return None
+
+    local_path = local_path.replace("\\", "/")
+
+    return f"{BASE_URL}/{local_path}"
 
 def interpret_environment_factors(
     factors: list[dict],
