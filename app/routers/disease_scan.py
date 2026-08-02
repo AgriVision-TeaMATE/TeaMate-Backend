@@ -31,6 +31,7 @@ from ..services.disease_ml_client import (
 from ..services.environment_explanation import (
     interpret_environment_factors,
 )
+from app.services.clip_leaf_validator import clip_validator
 
 router = APIRouter(prefix="/disease", tags=["Disease Scan"])
 
@@ -148,6 +149,23 @@ async def scan_disease(
                 content,
             )
         )
+
+        # --- CLIP leaf validation --------------------------------
+
+    for filename, content in image_contents:
+
+        validation = clip_validator.validate(content)
+
+        if not validation["is_leaf"]:
+
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Uploaded image is not a leaf image",
+                    "filename": filename,
+                    "confidence": validation["leaf_confidence"]
+                }
+            )
 
 
     image_urls = []
@@ -364,7 +382,7 @@ async def scan_disease(
     ),
 )
 
-@router.get("/{scan_id}", response_model=DiseaseScanResponse)
+@router.get("/by-scan-id/{scan_id}", response_model=DiseaseScanResponse)
 def get_scan(
     scan_id: str,
     db: Session = Depends(get_db),
