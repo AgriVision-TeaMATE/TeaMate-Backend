@@ -30,8 +30,10 @@ from ..services.disease_ml_client import (
 )
 from ..services.environment_explanation import (
     interpret_environment_factors,
+    to_public_url,
 )
 from app.services.clip_leaf_validator import clip_validator
+
 
 router = APIRouter(prefix="/disease", tags=["Disease Scan"])
 
@@ -70,7 +72,9 @@ def _persist_image_bytes(content: bytes, original_filename: str | None) -> str:
     with destination.open("wb") as buffer:
         buffer.write(content)
 
-    return f"/media/disease-scans/{file_name}"
+    return to_public_url(
+        f"media/disease-scans/{file_name}"
+    )
 
 
 @router.post(
