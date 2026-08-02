@@ -1,3 +1,4 @@
+import dataclasses
 import random
 from datetime import datetime
 from pathlib import Path
@@ -88,17 +89,17 @@ async def scan_tea_grade(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to store image: {e}")
 
-    # --- Call grading ML backend (mocked for now) -----------------------------
+    # --- Call grading ML backend -------------------------------------------
     try:
-        raw_predictions = await predict_tea_grade_composition(content)
+        result = await predict_tea_grade_composition(content)
     except MLPredictionError as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Tea grading analysis failed: {e}")
 
-    if not raw_predictions:
+    if not result.composition:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="ML backend returned no predictions")
 
-    top = raw_predictions[0]
-    grade_composition = {p.grade: p.percentage for p in raw_predictions}
+    top = result.composition[0]
+    grade_composition = {p.grade: p.percentage for p in result.composition}
     scan_datetime = datetime.now()
     scan_id = _generate_scan_id()
 
@@ -112,8 +113,14 @@ async def scan_tea_grade(
         grade_composition=grade_composition,
         dominant_grade=top.grade,
         dominant_grade_percentage=top.percentage,
-        total_particles_detected=None,  # populate once the real model reports counts
-        model_version="mock-v0",  # replace once a real grading model is wired in
+        total_particles_detected=result.num_particles_detected,
+        num_particles_classified=result.num_particles_classified,
+        particles=[dataclasses.asdict(p) for p in result.particles],
+        segmented_image_base64=result.segmented_image_base64,
+        method=result.method,
+        weighting=result.weighting,
+        px_per_mm_used=result.px_per_mm_used,
+        model_version="grading-v1",
         inference_time_ms=None,
     )
 

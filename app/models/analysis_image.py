@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import ForeignKey, Integer, Numeric, Text
+from sqlalchemy import JSON, ForeignKey, Integer, Numeric, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -17,7 +17,7 @@ class AnalysisImage(Base):
         nullable=False,
         index=True,
     )
-    image_url: Mapped[str] = mapped_column(Text, nullable=False)
+    image_urls: Mapped[list] = mapped_column(JSON, nullable=False)
     captured_area_sqm: Mapped[float] = mapped_column(
         Numeric(8, 2), nullable=False, default=0, server_default="0"
     )

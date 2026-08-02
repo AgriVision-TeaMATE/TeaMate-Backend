@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 import uvicorn
+from pathlib import Path
 
 from .config import get_settings
 from .database import engine, Base
@@ -18,6 +19,7 @@ from .routers import (
     yield_settings,
     weather,
     disease_scan,
+    disease_insights,
     tea_grade_scan,
 )
 
@@ -62,6 +64,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+Path("explanations/generated").mkdir(parents=True, exist_ok=True)
+
+app.mount(
+    "/explanations/generated",
+    StaticFiles(directory="explanations/generated"),
+    name="explanations",
+)
+
 # Allow mobile app connections (CORS)
 app.add_middleware(
     CORSMiddleware,
@@ -83,6 +93,7 @@ app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(yield_settings.router, prefix="/api/v1")
 app.include_router(weather.router, prefix="/api/v1")
 app.include_router(disease_scan.router, prefix="/api/v1")
+app.include_router(disease_insights.router, prefix="/api/v1")
 app.include_router(tea_grade_scan.router, prefix="/api/v1")
 
 

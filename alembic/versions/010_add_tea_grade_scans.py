@@ -7,9 +7,8 @@ Create Date: 2026-07-25
 """
 from alembic import op
 import sqlalchemy as sa
-
 revision = "010"
-down_revision = "009"
+down_revision = "009_add_diseases_and_risk_columns"
 branch_labels = None
 depends_on = None
 

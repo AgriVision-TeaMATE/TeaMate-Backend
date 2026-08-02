@@ -11,6 +11,13 @@ class GradeCompositionEntry(BaseModel):
     percentage: float
 
 
+class ParticlePredictionEntry(BaseModel):
+    label: str
+    bbox: list[int]
+    area_mm2: float | None = None
+    area_px: float | None = None
+
+
 class TeaGradeScanResponse(BaseModel):
     id: UUID
     scan_id: str
@@ -22,6 +29,12 @@ class TeaGradeScanResponse(BaseModel):
     dominant_grade: str
     dominant_grade_percentage: float
     total_particles_detected: int | None = None
+    num_particles_classified: int | None = None
+    method: str | None = None
+    weighting: str | None = None
+    px_per_mm_used: float | None = None
+    particles: list[ParticlePredictionEntry] = []
+    segmented_image_base64: str | None = None
     model_version: str | None = None
     inference_time_ms: float | None = None
     created_at: datetime
@@ -45,6 +58,12 @@ class TeaGradeScanResponse(BaseModel):
             dominant_grade=scan.dominant_grade,
             dominant_grade_percentage=scan.dominant_grade_percentage,
             total_particles_detected=scan.total_particles_detected,
+            num_particles_classified=scan.num_particles_classified,
+            method=scan.method,
+            weighting=scan.weighting,
+            px_per_mm_used=scan.px_per_mm_used,
+            particles=[ParticlePredictionEntry(**p) for p in (scan.particles or [])],
+            segmented_image_base64=scan.segmented_image_base64,
             model_version=scan.model_version,
             inference_time_ms=scan.inference_time_ms,
             created_at=scan.created_at,

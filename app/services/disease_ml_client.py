@@ -1,20 +1,16 @@
 """
 Real ML backend client.
 
-Sends the leaf image (base64) and the last-7-days weather summary to the
-external ML inference service and returns raw {class, probability}
-predictions. This module does NOT interpret those predictions — no
-descriptions, risk, or recommendations. Per the architecture split: ML
-backend predicts, main backend decides everything else.
+Invokes the internal TensorFlow model (loaded from serve_api.py) directly
+with the leaf image bytes and the last-7-days weather summary, and returns
+raw {class, probability} predictions. This module does NOT interpret those
+predictions — no descriptions, risk, or recommendations. Per the architecture
+split: ML backend predicts, main backend decides everything else.
 """
-import base64
+import asyncio
 from dataclasses import dataclass
-
-import httpx
-
-from ..config import get_settings
-
-settings = get_settings()
+from pathlib import Path
+import sys
 
 
 @dataclass
@@ -23,52 +19,129 @@ class RawPrediction:
     probability: float
 
 
+@dataclass
+class BatchPredictionResult:
+    predictions: list[RawPrediction]
+    explanation: dict
+    processed_images: int
+    failed_images: list[str]
+
+    environmental_summary: str | None = None
+    environmental_insights: list | None = None
+    environmental_technical_summary: dict | None = None
+
+
 class MLPredictionError(Exception):
     """Raised when the ML backend call fails or returns an unusable response."""
 
 
-async def predict_disease_from_image(
-    image_bytes: bytes,
-    weather: dict,
-) -> list[RawPrediction]:
-    """
-    POSTs to {ML_MODEL_URL}/predict with the image + weather aggregates.
-    Returns raw predictions sorted by probability descending.
-    """
-    encoded_image = base64.b64encode(image_bytes).decode("utf-8")
+# Lazily imported handle to the serve_api module (the ML backend).
+# Populated on the first call to predict_disease_from_images.
+_serve_api_module = None
 
-    payload = {
-        "image": encoded_image,
-        "weather": weather,
+
+def _get_serve_api():
+    """Lazy-import the serve_api module that holds the loaded model.
+
+    The project root (parent of the ``app`` package) is added to
+    ``sys.path`` so that ``import serve_api`` resolves regardless of the
+    current working directory.
+    """
+    global _serve_api_module
+    if _serve_api_module is None:
+        project_root = str(Path(__file__).resolve().parents[2])  # app/services -> root
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        import serve_api
+        _serve_api_module = serve_api
+    return _serve_api_module
+
+
+async def predict_disease_from_images(
+    images: list[tuple[str, bytes]],
+    weather: dict,
+) -> BatchPredictionResult:
+    """
+    Run disease inference directly using the internal ML model — no HTTP calls.
+
+    Invokes the model loading, preprocessing, inference, and postprocessing
+    code in serve_api.py directly via ``run_batch_inference``.
+
+    Returns:
+        Raw predictions + explanations returned by ML backend.
+    """
+
+    # Build the weather dict the model expects, defaulting missing / None
+    # values to 0 (same semantics as the previous HTTP form encoding).
+    weather_dict = {
+        "total_rainfall_last_7": weather.get("total_rainfall_last_7") or 0,
+        "avg_temperature_last_7": weather.get("avg_temperature_last_7") or 0,
+        "avg_humidity_last_7": weather.get("avg_humidity_last_7") or 0,
+        "avg_wind_speed_last_7": weather.get("avg_wind_speed_last_7") or 0,
+        "avg_sunshine_hours_last_7": weather.get("avg_sunshine_hours_last_7") or 0,
     }
 
-    url = f"{settings.ML_MODEL_URL.rstrip('/')}/predict"
-
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload, timeout=30.0)
-            response.raise_for_status()
-            data = response.json()
-    except httpx.TimeoutException as e:
-        raise MLPredictionError(f"ML backend timed out: {e}") from e
-    except httpx.HTTPStatusError as e:
+        serve_api = _get_serve_api()
+        data = await asyncio.to_thread(
+            serve_api.run_batch_inference, images, weather_dict
+        )
+
+    except ImportError as e:
         raise MLPredictionError(
-            f"ML backend returned {e.response.status_code}: {e.response.text}"
+            f"ML backend modules not available: {e}"
         ) from e
-    except httpx.RequestError as e:
-        raise MLPredictionError(f"Could not reach ML backend at {url}: {e}") from e
+
+    except Exception as e:
+        raise MLPredictionError(
+            f"ML backend call failed: {e}"
+        ) from e
+
 
     raw_predictions = data.get("predictions")
+
     if not raw_predictions:
-        raise MLPredictionError("ML backend response missing 'predictions'")
+        raise MLPredictionError(
+            "ML backend response missing 'predictions'"
+        )
+
 
     try:
         predictions = [
-            RawPrediction(class_key=p["class"], probability=float(p["probability"]))
+            RawPrediction(
+                class_key=p["class"],
+                probability=float(p["probability"]),
+            )
             for p in raw_predictions
         ]
-    except (KeyError, TypeError, ValueError) as e:
-        raise MLPredictionError(f"Malformed prediction entry: {e}") from e
 
-    predictions.sort(key=lambda p: p.probability, reverse=True)
-    return predictions
+    except (KeyError, TypeError, ValueError) as e:
+        raise MLPredictionError(
+            f"Malformed prediction entry: {e}"
+        ) from e
+
+
+    predictions.sort(
+        key=lambda p: p.probability,
+        reverse=True
+    )
+
+
+    return BatchPredictionResult(
+    predictions=predictions,
+    explanation=data.get("explanation", {}),
+    processed_images=data.get("processed_images", 0),
+    failed_images=data.get("failed_images", []),
+
+    environmental_summary=data.get(
+        "environmental_summary"
+    ),
+
+    environmental_insights=data.get(
+        "environmental_insights"
+    ),
+
+    environmental_technical_summary=data.get(
+        "environmental_technical_summary"
+    ),
+)
