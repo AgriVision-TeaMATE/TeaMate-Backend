@@ -1,19 +1,18 @@
 """Tea-grade composition prediction client.
 
-The real classify-then-count model (per docs/Plan_Final.md) doesn't exist
-yet, so this module returns a deterministic mock composition derived from
-the image bytes. The call signature matches what a real HTTP-based ML
-service would expose, so swapping the mock body for an actual `httpx` call
-later requires no changes to the router.
+Calls the real classify-then-count grading model service over HTTP and
+returns its raw prediction data. This module does not interpret the
+predictions further (no descriptions, recommendations, etc.) — the router
+is responsible for persisting and shaping the API response.
 """
 
-import hashlib
 from dataclasses import dataclass
 
-# from ..config import get_settings
-# import httpx
+import httpx
 
-GRADES = ["OP", "OPA", "PEKOE", "BOP", "BOP1", "BOPF", "Dust No.1"]
+from ..config import get_settings
+
+settings = get_settings()
 
 
 @dataclass
@@ -22,43 +21,98 @@ class RawGradePrediction:
     percentage: float
 
 
+@dataclass
+class ParticlePrediction:
+    label: str
+    bbox: list[int]
+    area_mm2: float | None = None
+    area_px: float | None = None
+
+
+@dataclass
+class RawGradingResult:
+    method: str
+    weighting: str
+    px_per_mm_used: float
+    num_particles_detected: int
+    num_particles_classified: int
+    composition: list[RawGradePrediction]
+    particles: list[ParticlePrediction]
+    segmented_image_base64: str | None = None
+
+
 class MLPredictionError(Exception):
     """Raised when the grading ML backend fails or returns malformed data."""
 
 
-async def predict_tea_grade_composition(image_bytes: bytes) -> list[RawGradePrediction]:
-    """Returns a mock per-grade composition breakdown summing to 100.
-
-    Deterministic per-image (hash-seeded) so repeated calls with the same
-    image return the same result, without needing a real model yet.
+async def predict_tea_grade_composition(image_bytes: bytes) -> RawGradingResult:
+    """POSTs the sample image to the grading model's /predict endpoint and
+    returns its full raw response (composition, particles, segmented image).
     """
     if not image_bytes:
         raise MLPredictionError("No image bytes provided")
 
-    digest = hashlib.sha256(image_bytes).digest()
-    weights = [digest[i] + 1 for i in range(len(GRADES))]  # avoid all-zero weights
-    total_weight = sum(weights)
+    if not settings.TEA_GRADING_ML_URL:
+        raise MLPredictionError("TEA_GRADING_ML_URL is not configured")
 
-    percentages = [round(w / total_weight * 100, 2) for w in weights]
-    # Correct rounding drift so the breakdown sums to exactly 100.
-    percentages[-1] = round(100 - sum(percentages[:-1]), 2)
+    url = f"{settings.TEA_GRADING_ML_URL.rstrip('/')}/predict"
 
-    predictions = [
-        RawGradePrediction(grade=grade, percentage=pct)
-        for grade, pct in zip(GRADES, percentages)
-    ]
-    return sorted(predictions, key=lambda p: p.percentage, reverse=True)
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                files={"file": ("image.jpg", image_bytes)},
+                data={
+                    "method": "traditional",
+                    "model_name": "random_forest",
+                    "backbone": "resnet18",
+                    "include_image": True,
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.TimeoutException as e:
+        raise MLPredictionError(f"Grading ML backend timed out: {e}") from e
+    except httpx.HTTPStatusError as e:
+        raise MLPredictionError(
+            f"Grading ML backend returned {e.response.status_code}: {e.response.text}"
+        ) from e
+    except httpx.RequestError as e:
+        raise MLPredictionError(f"Could not reach grading ML backend at {url}: {e}") from e
 
-    # --- Future real integration sketch (once the model service exists) ---
-    # settings = get_settings()
-    # async with httpx.AsyncClient(timeout=30.0) as client:
-    #     try:
-    #         response = await client.post(
-    #             f"{settings.TEA_GRADING_ML_URL.rstrip('/')}/predict",
-    #             files={"image": image_bytes},
-    #         )
-    #         response.raise_for_status()
-    #     except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.RequestError) as e:
-    #         raise MLPredictionError(str(e)) from e
-    #     data = response.json()
-    #     return [RawGradePrediction(**item) for item in data["composition"]]
+    predicted_proportions = data.get("predicted_proportions")
+    if not predicted_proportions:
+        raise MLPredictionError("Grading ML backend response missing 'predicted_proportions'")
+
+    try:
+        composition = [
+            RawGradePrediction(grade=grade, percentage=float(pct) * 100)
+            for grade, pct in predicted_proportions.items()
+        ]
+        composition.sort(key=lambda p: p.percentage, reverse=True)
+
+        particles = [
+            ParticlePrediction(
+                label=p["label"],
+                bbox=list(p["bbox"]),
+                area_mm2=p.get("area_mm2"),
+                area_px=p.get("area_px"),
+            )
+            for p in data.get("particles", [])
+        ]
+
+        result = RawGradingResult(
+            method=data["method"],
+            weighting=data["weighting"],
+            px_per_mm_used=float(data["px_per_mm_used"]),
+            num_particles_detected=int(data["num_particles_detected"]),
+            num_particles_classified=int(data["num_particles_classified"]),
+            composition=composition,
+            particles=particles,
+            segmented_image_base64=data.get("segmented_image_base64"),
+        )
+    except (KeyError, TypeError, ValueError) as e:
+        raise MLPredictionError(f"Malformed grading response: {e}") from e
+
+    return result

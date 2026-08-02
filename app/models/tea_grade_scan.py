@@ -27,6 +27,12 @@ class TeaGradeScan(Base):
     dominant_grade: Mapped[str] = mapped_column(String(50), nullable=False)
     dominant_grade_percentage: Mapped[float] = mapped_column(Float, nullable=False)
     total_particles_detected: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    num_particles_classified: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    particles: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    segmented_image_base64: Mapped[str | None] = mapped_column(String, nullable=True)
+    method: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    weighting: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    px_per_mm_used: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     inference_time_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
