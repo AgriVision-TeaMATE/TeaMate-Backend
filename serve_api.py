@@ -9,6 +9,8 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List
+from app.services.environment_explanation import to_public_url
+from fastapi.staticfiles import StaticFiles
 
 import cv2
 from dotenv import load_dotenv
@@ -358,7 +360,6 @@ def run_batch_inference(
         )
         return idx, result
 
-    max_workers = 1
     with ThreadPoolExecutor(max_workers=1) as pool:
         futures = [
             pool.submit(_explain_one, idx, img_batch)
@@ -371,7 +372,7 @@ def run_batch_inference(
     per_image_results = [
         {
             "filename": processed_names[idx],
-            "gradcam_image": exp["gradcam_image"],
+            "gradcam_image": to_public_url(exp["gradcam_image"]),
             "environment_factors": exp["environment_factors"],
         }
         for idx, exp in enumerate(per_image_explanations)
@@ -404,7 +405,7 @@ def run_batch_inference(
 
         "explanation": {
             "per_image": per_image_results,
-            "aggregated_gradcam": aggregated_path,
+            "aggregated_gradcam": to_public_url(aggregated_path),
         },
 
         "processed_images": len(prob_vectors),
