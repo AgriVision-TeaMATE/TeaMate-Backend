@@ -64,6 +64,8 @@ def _persist_image_bytes(content: bytes, original_filename: str | None) -> str:
 async def scan_tea_grade(
     image: UploadFile = File(..., description="Tea sample image (jpeg/png/webp)"),
     field_id: UUID | None = Form(default=None),
+    method: str = Form("traditional", description="'traditional' or 'cnn'"),
+    scale_level: int | None = Form(None, description="1 (130% zoom, ~20 px/mm) or 2 (200% zoom, ~31 px/mm)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -91,7 +93,7 @@ async def scan_tea_grade(
 
     # --- Call grading ML backend -------------------------------------------
     try:
-        result = await predict_tea_grade_composition(content)
+        result = await predict_tea_grade_composition(content, method=method, scale_level=scale_level)
     except MLPredictionError as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Tea grading analysis failed: {e}")
 

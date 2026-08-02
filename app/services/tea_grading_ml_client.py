@@ -45,7 +45,11 @@ class MLPredictionError(Exception):
     """Raised when the grading ML backend fails or returns malformed data."""
 
 
-async def predict_tea_grade_composition(image_bytes: bytes) -> RawGradingResult:
+async def predict_tea_grade_composition(
+    image_bytes: bytes,
+    method: str = "traditional",
+    scale_level: int | None = None,
+) -> RawGradingResult:
     """POSTs the sample image to the grading model's /predict endpoint and
     returns its full raw response (composition, particles, segmented image).
     """
@@ -57,17 +61,21 @@ async def predict_tea_grade_composition(image_bytes: bytes) -> RawGradingResult:
 
     url = f"{settings.TEA_GRADING_ML_URL.rstrip('/')}/predict"
 
+    data = {
+        "method": method,
+        "model_name": "random_forest",
+        "backbone": "resnet18",
+        "include_image": True,
+    }
+    if scale_level is not None:
+        data["scale_level"] = scale_level
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 url,
                 files={"file": ("image.jpg", image_bytes)},
-                data={
-                    "method": "traditional",
-                    "model_name": "random_forest",
-                    "backbone": "resnet18",
-                    "include_image": True,
-                },
+                data=data,
                 timeout=30.0,
             )
             response.raise_for_status()
