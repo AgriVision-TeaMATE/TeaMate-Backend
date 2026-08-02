@@ -18,6 +18,7 @@ from .routers import (
     yield_settings,
     weather,
     disease_scan,
+    disease_insights,
     tea_grade_scan,
 )
 
@@ -83,6 +84,7 @@ app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(yield_settings.router, prefix="/api/v1")
 app.include_router(weather.router, prefix="/api/v1")
 app.include_router(disease_scan.router, prefix="/api/v1")
+app.include_router(disease_insights.router, prefix="/api/v1")
 app.include_router(tea_grade_scan.router, prefix="/api/v1")
 
 
