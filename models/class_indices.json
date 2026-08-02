@@ -1,0 +1,8 @@
+{
+    "anthracnose": 0,
+    "blister_blight": 1,
+    "fungal": 2,
+    "healthy": 3,
+    "mite_damage_pest": 4,
+    "nutrient_deficiency_Mg": 5
+}
