@@ -35,7 +35,7 @@ DISEASES = [
             "Avoid overhead irrigation",
         ],
         "severity_default": "high",
-        "disease_type": "Fungal Disease",
+        "category": "Fungal Disease",
     },
 
     {
@@ -54,7 +54,7 @@ DISEASES = [
             "Keep field records updated",
         ],
         "severity_default": "none",
-        "disease_type": "Healthy",
+        "category": "Healthy",
     },
 
     {
@@ -77,7 +77,7 @@ DISEASES = [
             "Apply appropriate treatments based on pest identification",
         ],
         "severity_default": "medium",
-        "disease_type": "Unknown",
+        "category": "Unknown",
     },
 
     {
@@ -101,7 +101,7 @@ DISEASES = [
             "Avoid overhead irrigation",
         ],
         "severity_default": "high",
-        "disease_type": "Fungal Disease",
+        "category": "Fungal Disease",
     },
 
     {
@@ -124,7 +124,7 @@ DISEASES = [
             "Avoid excessive nitrogen fertilization",
         ],
         "severity_default": "low",
-        "disease_type": "Environmental Stress",
+        "category": "Environmental Stress",
     },
 
     {
@@ -148,7 +148,7 @@ DISEASES = [
             "Use insecticidal soap for heavy infestations",
         ],
         "severity_default": "medium",
-        "disease_type": "Nutritional Stress",
+        "category": "Nutritional Stress",
     },
 
     {
@@ -171,7 +171,32 @@ DISEASES = [
             "Maintain field hygiene by removing weeds and alternate hosts",
         ],
         "severity_default": "medium",
-        "disease_type": "Unknown",
+        "category": "Unknown",
+    },
+
+    {
+        "id": "84ea94f8-ec76-48bf-a389-34008145c846",
+        "class_key": "Nutrient_deficiency_Mg",
+        "name": "Nutrient Deficiency (Magnesium)",
+        "description": (
+            "Magnesium deficiency causing interveinal chlorosis (yellowing "
+            "between leaf veins) on mature tea leaves, reducing photosynthesis "
+            "and yield."
+        ),
+        "causes": [
+            "Low magnesium content in soil",
+            "Soil acidity limiting magnesium uptake",
+            "Excessive potassium fertilization competing with magnesium uptake",
+            "Poor root health limiting nutrient absorption",
+        ],
+        "recommendations": [
+            "Apply magnesium sulfate (Epsom salt) as a soil or foliar treatment",
+            "Conduct soil testing to confirm the deficiency",
+            "Balance potassium fertilization to avoid antagonism with magnesium uptake",
+            "Improve soil pH management to enhance nutrient availability",
+        ],
+        "severity_default": "medium",
+        "category": "Nutritional Stress",
     },
 ]
 
@@ -194,7 +219,7 @@ def seed_diseases():
                 existing.causes = entry["causes"]
                 existing.recommendations = entry["recommendations"]
                 existing.severity_default = entry["severity_default"]
-                existing.disease_type = entry["disease_type"]
+                existing.category = entry["category"]
 
             else:
                 db.add(
@@ -206,7 +231,7 @@ def seed_diseases():
                         causes=entry["causes"],
                         recommendations=entry["recommendations"],
                         severity_default=entry["severity_default"],
-                        disease_type=entry["disease_type"],
+                        category=entry["category"],
                         created_at=SEED_TIME,
                         updated_at=SEED_TIME,
                     )
